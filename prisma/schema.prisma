@@ -1,0 +1,138 @@
+// ระบบเบิกค่าอินเทอร์เน็ต — บริษัท น้ำตาลสุรินทร์ จำกัด
+// วันที่ทุกช่องที่เป็น @db.Date เก็บเป็น ค.ศ. (ISO) ไม่มีเวลา
+// constraint ที่ Prisma เขียนไม่ได้ (exclusion, check, trigger) อยู่ใน migration SQL
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  CREATOR // ผู้จัดทำ
+  ACCOUNTING // ฝ่ายบัญชี
+  ADMIN
+}
+
+enum CenterStatus {
+  ACTIVE // ใช้งาน
+  MOVED // ย้าย
+  CLOSED // ปิด
+}
+
+enum RequestStatus {
+  CREATED // สร้างแล้ว
+  SENT // ส่งบัญชีแล้ว
+  PAID // จ่ายแล้ว
+}
+
+enum LogAction {
+  CREATE
+  EDIT
+  DELETE
+  SEND
+  PAY
+  REVERT
+}
+
+// ล็อกอินด้วยชื่อผู้ใช้ + รหัสผ่านของระบบเอง (ไม่พึ่งบริการภายนอก)
+model User {
+  id                 String   @id @default(cuid())
+  username           String   @unique // เก็บเป็นตัวพิมพ์เล็ก
+  name               String
+  email              String? // ไว้ส่งแจ้งเตือน (ถ้ามี)
+  passwordHash       String // scrypt — ดู src/server/password.ts
+  mustChangePassword Boolean  @default(true) // บังคับเปลี่ยนรหัสหลังล็อกอินครั้งแรก/admin รีเซ็ต
+  role               Role
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  requests Request[]
+  logs     ApprovalLog[]
+  sessions Session[]
+}
+
+// session ล็อกอิน — cookie เก็บ token, DB เก็บแค่ sha256 ของ token
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ประวัติการล็อกอิน ใช้จำกัดการลองรหัสผิดและตรวจย้อนหลัง
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  username  String
+  success   Boolean
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([username, createdAt])
+}
+
+model Center {
+  id            String       @id @default(cuid())
+  customerCode  String       @unique // รหัสลูกค้า 3BB ใช้ค้นหา
+  serviceNumber String? // หมายเลขบริการ (ข้อมูลประกอบ)
+  name          String
+  normalAmount  Decimal      @db.Decimal(12, 2) // ยอดปกติต่อเดือน
+  dueDay        Int // วันครบกำหนดประจำเดือน 1-31
+  status        CenterStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  requests Request[]
+}
+
+model Request {
+  id              String        @id @default(cuid())
+  centerId        String
+  invoiceNo       String
+  amount          Decimal       @db.Decimal(12, 2)
+  periodStart     DateTime      @db.Date
+  periodEnd       DateTime      @db.Date
+  dueDate         DateTime      @db.Date
+  status          RequestStatus @default(CREATED)
+  paidDate        DateTime?     @db.Date
+  paymentRef      String?
+  invoiceFileKey  String?
+  invoiceFileName String?
+  createdById     String
+  deletedAt       DateTime? // soft delete: ลบได้เฉพาะสถานะ CREATED
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  center    Center        @relation(fields: [centerId], references: [id], onDelete: Restrict)
+  createdBy User          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  logs      ApprovalLog[]
+
+  @@index([centerId, periodStart])
+  @@index([status, dueDate])
+}
+
+// ประวัติการเปลี่ยนสถานะ เพิ่มอย่างเดียว (trigger ใน DB ปฏิเสธ UPDATE/DELETE)
+model ApprovalLog {
+  id         String         @id @default(cuid())
+  requestId  String
+  action     LogAction
+  fromStatus RequestStatus?
+  toStatus   RequestStatus?
+  actorId    String
+  note       String?
+  createdAt  DateTime       @default(now())
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  actor   User    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([requestId, createdAt])
+}
