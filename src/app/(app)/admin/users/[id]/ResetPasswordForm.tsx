@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyRound } from "lucide-react";
 import { useActionState } from "react";
 import { Alert, Button } from "@/components/ui";
 import { initialFormState } from "@/lib/formState";
@@ -21,8 +22,8 @@ export function ResetPasswordForm({ id, username }: { id: string; username: stri
     >
       <input type="hidden" name="id" value={id} />
       {state.error && <Alert tone="error">{state.error}</Alert>}
-      <p className="text-sm text-zinc-600">ใช้เมื่อผู้ใช้ลืมรหัสผ่าน ระบบจะสร้างรหัสชั่วคราวใหม่ให้</p>
-      <Button type="submit" variant="secondary" disabled={pending}>
+      <p className="text-sm text-slate-600">ใช้เมื่อผู้ใช้ลืมรหัสผ่าน ระบบจะสร้างรหัสชั่วคราวใหม่ให้</p>
+      <Button type="submit" variant="secondary" icon={KeyRound} disabled={pending}>
         {pending ? "กำลังรีเซ็ต…" : "รีเซ็ตรหัสผ่าน"}
       </Button>
     </form>

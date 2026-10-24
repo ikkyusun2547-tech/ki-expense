@@ -95,6 +95,18 @@ export const changePasswordSchema = z
     error: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม",
   });
 
+// ---------- ตั้งค่าใบเบิก ----------
+
+export const reportSettingsSchema = z.object({
+  department: requiredText("ชื่อฝ่าย (จาก)", 100),
+  recipient: requiredText("เรียน", 150),
+  purpose: requiredText("เพื่อ", 100),
+  requesterTitle: requiredText("ตำแหน่งผู้ขออนุมัติ", 100),
+  approverName: z.string().trim().max(100, { error: "ยาวเกิน 100 ตัวอักษร" }), // ว่างได้ = เว้นให้เขียนมือ
+  approverTitle: requiredText("ตำแหน่งผู้อนุมัติ", 100),
+  formCode: requiredText("รหัสฟอร์ม", 100),
+});
+
 // ---------- ตัวช่วย ----------
 
 export type FieldErrors = Record<string, string[] | undefined>;

@@ -1,76 +1,21 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Role } from "@/generated/prisma/enums";
 import { GET as getInvoice } from "@/app/api/requests/[id]/invoice/route";
-import { initialFormState } from "@/lib/formState";
-import { changeRequestStatus, findCenterByCode, saveRequest } from "@/server/actions/requests";
-import { login } from "@/server/actions/auth";
+import { GET as getRequestPdf } from "@/app/api/requests/[id]/pdf/route";
+import { findCenterByCode } from "@/server/actions/requests";
 import { db } from "@/server/db";
 import { invoiceFilePath } from "@/server/files";
-import { hashPassword } from "@/server/password";
-import { form, PASSWORD, run } from "./helpers";
+import { run } from "./helpers";
+import { PDF, pdfFile, requestFixtures } from "./requestFixtures";
 import { cookieJar } from "./setup";
 
-// ใช้ prefix ต่างจาก auth test (zz-test-) เพราะข้อมูลชุดนี้มี ApprovalLog ซึ่งลบไม่ได้
-// DB ทดสอบถูกล้างใหม่ทุกครั้งที่รัน จึงไม่ต้อง cleanup
-const P = `zz-req-${Date.now()}-`;
-let seq = 0;
-
-const PDF = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a]);
-const pdfFile = (name = "ใบแจ้งหนี้.pdf") => new File([PDF], name, { type: "application/pdf" });
-
-async function user(role: Role) {
-  return db.user.create({
-    data: { username: `${P}${role.toLowerCase()}`, name: `ทดสอบ ${role}`, role, passwordHash: await hashPassword(PASSWORD), mustChangePassword: false },
-  });
-}
-
-async function loginAs(role: Role) {
-  cookieJar.clear();
-  await run(() => login(initialFormState, form({ username: `${P}${role.toLowerCase()}`, password: PASSWORD })));
-}
-
-async function center(status: "ACTIVE" | "MOVED" | "CLOSED" = "ACTIVE") {
-  return db.center.create({
-    data: { customerCode: `${P}C${++seq}`, name: `ศูนย์ทดสอบ ${seq}`, normalAmount: "749.00", dueDay: 15, status },
-  });
-}
-
-// ใบเบิกปกติ (ไม่มีคำเตือน) ของรอบ ก.ย. 2569
-const valid = (centerId: string, extra: Record<string, string> = {}) => ({
-  centerId,
-  invoiceNo: "INV-001",
-  amount: "749",
-  periodStart: "2026-09-01",
-  periodEnd: "2026-09-30",
-  dueDate: "2026-10-15",
-  ...extra,
-});
-
-function requestForm(values: Record<string, string>, file: File | null = pdfFile()) {
-  const fd = form(values);
-  if (file) fd.set("invoiceFile", file);
-  return fd;
-}
-
-const save = (values: Record<string, string>, file?: File | null) =>
-  run(() => saveRequest({}, requestForm(values, file === undefined ? pdfFile() : file)));
-
-const idFrom = (outcome: Awaited<ReturnType<typeof save>>) => {
-  if (!("redirect" in outcome)) throw new Error(`expected redirect, got ${JSON.stringify(outcome)}`);
-  return outcome.redirect.split("/").pop()!;
-};
+// prefix ต่างจาก auth test (zz-test-) เพราะข้อมูลชุดนี้มี ApprovalLog ซึ่งลบไม่ได้
+const { createUsers, loginAs, center: makeCenter, valid, save, idFrom, status } = requestFixtures("zz-req-");
+const center = (status?: "ACTIVE" | "MOVED" | "CLOSED") => makeCenter({ status });
 
 const countUploads = () => readdirSync(process.env.UPLOAD_DIR!, { recursive: true }).filter((f) => String(f).includes(".")).length;
 
-const status = (id: string, action: string, note = "") =>
-  run(() => changeRequestStatus(initialFormState, form({ id, action, note })));
-
-beforeAll(async () => {
-  await user("CREATOR");
-  await user("ACCOUNTING");
-  await user("ADMIN");
-});
+beforeAll(createUsers);
 afterAll(() => db.$disconnect());
 
 describe("ค้นหาศูนย์จากรหัสลูกค้า", () => {
@@ -252,6 +197,33 @@ describe("แก้ไข / ส่งบัญชี / ลบ / ย้อนส�
     const log = await db.approvalLog.findFirstOrThrow();
     await expect(db.approvalLog.update({ where: { id: log.id }, data: { note: "แก้" } })).rejects.toThrow();
     await expect(db.approvalLog.delete({ where: { id: log.id } })).rejects.toThrow();
+  });
+});
+
+describe("ใบเบิก PDF", () => {
+  const getPdf = (id: string) => getRequestPdf(new Request("http://x"), { params: Promise.resolve({ id }) });
+
+  it("ล็อกอินแล้วได้ PDF ชื่อไฟล์มีชื่อศูนย์และรอบ", async () => {
+    const c = await center();
+    await loginAs("CREATOR");
+    const id = idFrom(await save(valid(c.id)));
+
+    const res = await getPdf(id);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("application/pdf");
+    expect(res.headers.get("Content-Disposition")).toContain(encodeURIComponent(`ใบเบิก-${c.name}-2026-10-15.pdf`));
+    expect(Buffer.from(await res.arrayBuffer()).subarray(0, 5).toString()).toBe("%PDF-");
+  });
+
+  it("ใบที่ถูกลบ → 404; ไม่ได้ล็อกอิน → หน้าล็อกอิน", async () => {
+    const c = await center();
+    await loginAs("CREATOR");
+    const id = idFrom(await save(valid(c.id)));
+    await status(id, "DELETE");
+    expect((await getPdf(id)).status).toBe(404);
+
+    cookieJar.clear();
+    expect(await run(() => getPdf(id))).toEqual({ redirect: "/login" });
   });
 });
 

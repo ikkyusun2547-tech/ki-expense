@@ -31,7 +31,7 @@ export function CreateUserForm() {
         </div>
       )}
       <Field label="ชื่อผู้ใช้" htmlFor="username" errors={errors.username} hint="ใช้ล็อกอิน a-z 0-9 . _ - (3-32 ตัว)">
-        <input id="username" name="username" defaultValue={v?.username} required autoCapitalize="none" aria-invalid={!!errors.username} className={`${inputClass} font-mono`} />
+        <input id="username" name="username" defaultValue={v?.username} required autoCapitalize="none" aria-invalid={!!errors.username} className={`${inputClass} tabular-nums`} />
       </Field>
       <Field label="บทบาท" htmlFor="role" errors={errors.role}>
         <select id="role" name="role" defaultValue={v?.role ?? "CREATOR"} className={inputClass}>

@@ -120,6 +120,20 @@ model Request {
   @@index([status, dueDate])
 }
 
+// ข้อความบนใบเบิก (บันทึกภายใน FM-50000-02) ที่ admin แก้ได้ — มีแถวเดียว (id = 1)
+// ถ้ายังไม่มีแถว ใช้ค่าเริ่มต้นใน src/lib/pdf/memoData.ts
+model ReportSetting {
+  id             Int      @id @default(1)
+  department     String // จาก (ฝ่าย)
+  recipient      String // เรียน
+  purpose        String // เพื่อ
+  requesterTitle String // ตำแหน่งผู้ขออนุมัติ (ชื่อ = ผู้จัดทำที่สร้างใบเบิก)
+  approverName   String // ชื่อผู้อนุมัติ (ว่าง = เว้นให้เขียนมือ)
+  approverTitle  String
+  formCode       String // ท้ายกระดาษ เช่น FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566
+  updatedAt      DateTime @updatedAt
+}
+
 // ประวัติการเปลี่ยนสถานะ เพิ่มอย่างเดียว (trigger ใน DB ปฏิเสธ UPDATE/DELETE)
 model ApprovalLog {
   id         String         @id @default(cuid())

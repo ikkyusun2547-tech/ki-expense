@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   addDays,
   daysInclusive,
-  formatCEDate,
+  beYear,
+  formatBEDate,
   formatThaiDate,
   formatThaiDateTime,
   fromISODate,
+  thaiMonthName,
   isISODate,
   periodsOverlap,
   toISODate,
@@ -68,7 +70,10 @@ describe("รูปแบบการแสดงผล", () => {
     expect(formatThaiDateTime(new Date("2026-10-21T07:05:00Z"))).toBe("21 ต.ค. 2569 14:05");
     expect(formatThaiDateTime(new Date("2026-12-31T17:30:00Z"))).toBe("1 ม.ค. 2570 00:30");
   });
-  it("ใบเบิกเป็น ค.ศ.", () => {
-    expect(formatCEDate("2026-01-05")).toBe("05/01/2026");
+  it("ใบเบิก (บันทึกภายใน) เป็น พ.ศ.", () => {
+    expect(formatBEDate("2026-11-12")).toBe("12/11/2569");
+    expect(formatBEDate("2027-01-05")).toBe("05/01/2570");
+    expect(thaiMonthName("2026-11-12")).toBe("พฤศจิกายน");
+    expect(beYear("2026-11-12")).toBe(2569);
   });
 });

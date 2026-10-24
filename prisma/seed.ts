@@ -12,8 +12,8 @@ const CSV_PATH = path.join(process.cwd(), "data", "centers.csv");
 
 async function seedCenters() {
   if (!existsSync(CSV_PATH)) {
-    console.error(`✗ ไม่พบไฟล์ ${CSV_PATH} — วางไฟล์ทะเบียนศูนย์ (CSV UTF-8) ไว้ที่นี่ก่อน`);
-    process.exit(1);
+    console.warn(`⚠ ไม่พบไฟล์ ${CSV_PATH} — ข้ามการนำเข้าทะเบียนศูนย์ (เพิ่มศูนย์ทีละรายการในหน้าทะเบียนศูนย์ได้)`);
+    return;
   }
 
   const { text, encoding } = decodeCsvBuffer(readFileSync(CSV_PATH));

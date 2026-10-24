@@ -1,5 +1,6 @@
 "use client";
 
+import { Trash } from "lucide-react";
 import { useActionState } from "react";
 import { Alert, Button } from "@/components/ui";
 import { initialFormState } from "@/lib/formState";
@@ -18,7 +19,7 @@ export function DeleteCenterForm({ id, name }: { id: string; name: string }) {
     >
       <input type="hidden" name="id" value={id} />
       {state.error && <Alert tone="error">{state.error}</Alert>}
-      <Button type="submit" variant="danger" disabled={pending}>
+      <Button type="submit" variant="danger" icon={Trash} disabled={pending}>
         ลบศูนย์นี้
       </Button>
     </form>

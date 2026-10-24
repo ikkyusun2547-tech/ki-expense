@@ -1,5 +1,6 @@
+import { Building, Trash } from "lucide-react";
 import { notFound } from "next/navigation";
-import { Alert, Card, PageHeader } from "@/components/ui";
+import { Alert, Card, CardTitle, PageHeader } from "@/components/ui";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
 import { CenterForm } from "../CenterForm";
@@ -17,7 +18,7 @@ export default async function EditCenterPage({ params }: PageProps<"/admin/cente
 
   return (
     <>
-      <PageHeader title={`แก้ไขศูนย์ ${center.name}`} />
+      <PageHeader icon={Building} title={`แก้ไขศูนย์ ${center.name}`} description={`รหัสลูกค้า ${center.customerCode}`} />
       <div className="flex max-w-2xl flex-col gap-6">
         <Card>
           <CenterForm
@@ -34,7 +35,7 @@ export default async function EditCenterPage({ params }: PageProps<"/admin/cente
         </Card>
 
         <Card>
-          <h2 className="mb-3 font-medium text-zinc-900">ลบศูนย์</h2>
+          <CardTitle icon={Trash}>ลบศูนย์</CardTitle>
           {center._count.requests > 0 ? (
             <Alert tone="info">
               ศูนย์นี้เคยมีใบเบิก {center._count.requests} ใบ จึงลบไม่ได้ ถ้าศูนย์ย้ายหรือปิดแล้ว ให้เปลี่ยนสถานะด้านบนแทน

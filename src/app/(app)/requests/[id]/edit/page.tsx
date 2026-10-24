@@ -1,3 +1,4 @@
+import { Pencil } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { Card, PageHeader } from "@/components/ui";
 import { canPerform } from "@/lib/status";
@@ -19,6 +20,7 @@ export default async function EditRequestPage({ params }: PageProps<"/requests/[
   return (
     <>
       <PageHeader
+        icon={Pencil}
         title="แก้ไขใบเบิก"
         description='แก้ได้เฉพาะใบเบิกสถานะ "สร้างแล้ว" · เปลี่ยนศูนย์ไม่ได้ ถ้าเลือกศูนย์ผิดให้ลบแล้วสร้างใหม่'
       />

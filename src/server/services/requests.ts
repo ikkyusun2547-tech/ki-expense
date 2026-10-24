@@ -1,8 +1,9 @@
 import "server-only";
 import { toAmountString } from "@/lib/money";
+import { checkPayment, type PaymentInput } from "@/lib/rules/paymentRules";
 import { checkRequest, type Issue, type RequestDraft } from "@/lib/rules/requestRules";
 import { checkTransition, type RequestAction } from "@/lib/status";
-import { fromISODate, toISODate } from "@/lib/thai/date";
+import { formatThaiDate, fromISODate, toISODate, type ISODate } from "@/lib/thai/date";
 import type { CurrentUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { isOverlapViolation } from "@/server/dbErrors";
@@ -176,7 +177,7 @@ export async function updateRequest(args: {
 export type TransitionOutcome = { ok: true } | { ok: false; error: string };
 
 // เปลี่ยนสถานะ: SEND (ส่งบัญชีแล้ว), DELETE (ลบแบบ soft), REVERT (admin ย้อนกลับ ต้องมีเหตุผล)
-// PAY (บันทึกการจ่าย) จะเพิ่มในเฟส 5
+// PAY แยกเป็น payRequest เพราะต้องรับวันที่จ่าย + เลขอ้างอิง
 export async function transitionRequest(args: {
   requestId: string;
   action: Extract<RequestAction, "SEND" | "DELETE" | "REVERT">;
@@ -207,6 +208,49 @@ export async function transitionRequest(args: {
           toStatus: allowed.to,
           actorId: args.actor.id,
           note,
+        },
+      });
+    });
+  } catch (error) {
+    if (error instanceof StaleRequestError) return { ok: false, error: STALE_MESSAGE };
+    throw error;
+  }
+  return { ok: true };
+}
+
+export type PayOutcome = { ok: true } | { ok: false; error?: string; fieldErrors?: { paidDate?: string; paymentRef?: string } };
+
+// ฝ่ายบัญชีบันทึกการจ่าย: SENT → PAID (ล็อก) — แก้ได้เฉพาะวันที่จ่ายกับเลขอ้างอิง
+export async function payRequest(args: {
+  requestId: string;
+  input: PaymentInput;
+  today: ISODate;
+  actor: CurrentUser;
+}): Promise<PayOutcome> {
+  const current = await db.request.findUnique({ where: { id: args.requestId } });
+  if (!current || current.deletedAt) return { ok: false, error: "ไม่พบใบเบิกนี้" };
+
+  const allowed = checkTransition(args.actor.role, "PAY", current.status);
+  if (!allowed.ok) return { ok: false, error: allowed.reason };
+
+  const payment = checkPayment(args.input, args.today);
+  if (!payment.ok) return { ok: false, fieldErrors: payment.errors };
+
+  try {
+    await db.$transaction(async (tx) => {
+      const updated = await tx.request.updateMany({
+        where: { id: current.id, status: "SENT", deletedAt: null },
+        data: { status: "PAID", paidDate: fromISODate(payment.paidDate), paymentRef: payment.paymentRef },
+      });
+      if (updated.count === 0) throw new StaleRequestError();
+      await tx.approvalLog.create({
+        data: {
+          requestId: current.id,
+          action: "PAY",
+          fromStatus: "SENT",
+          toStatus: "PAID",
+          actorId: args.actor.id,
+          note: `จ่ายวันที่ ${formatThaiDate(payment.paidDate)} เลขอ้างอิง ${payment.paymentRef}`,
         },
       });
     });

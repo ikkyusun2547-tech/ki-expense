@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition, type FormEvent } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import { Check, CircleAlert, Paperclip, Search, TriangleAlert } from "lucide-react";
 import { CenterStatusBadge } from "@/components/StatusBadge";
-import { Alert, Button, ButtonLink, Field, inputClass } from "@/components/ui";
+import { Alert, Button, ButtonLink, cx, Field, inputClass, StepTitle } from "@/components/ui";
 import { ACCEPT_ATTR, MAX_UPLOAD_LABEL } from "@/lib/files";
 import { formatAmount } from "@/lib/money";
 import { daysInclusive, formatThaiDate, isISODate } from "@/lib/thai/date";
@@ -17,7 +18,7 @@ export type RequestFormValues = {
 };
 
 type Props =
-  | { mode: "create" }
+  | { mode: "create"; initialCode?: string }
   | { mode: "edit"; id: string; center: CenterSummary; values: RequestFormValues; existingFileName: string | null };
 
 const EMPTY: RequestFormValues = { invoiceNo: "", amount: "", periodStart: "", periodEnd: "", dueDate: "" };
@@ -32,6 +33,7 @@ export function RequestForm(props: Props) {
   const [values, setValues] = useState<RequestFormValues>(props.mode === "edit" ? props.values : EMPTY);
   // ผลตรวจล่าสุดใช้ได้เฉพาะกับค่าที่ส่งไป — แก้ช่องใดก็ตามแล้วซ่อนผลเดิม
   const [resultStale, setResultStale] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
 
   const update = (key: keyof RequestFormValues) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setValues((v) => ({ ...v, [key]: e.target.value }));
@@ -63,26 +65,37 @@ export function RequestForm(props: Props) {
       : null;
 
   return (
-    <div className="flex flex-col gap-6">
-      {props.mode === "create" ? (
-        <CenterLookup
-          center={center}
-          onFound={(c) => {
-            setCenter(c);
-            setResultStale(true);
-          }}
+    <div className="flex flex-col gap-8">
+      <section>
+        <StepTitle
+          step={1}
+          title="เลือกศูนย์"
+          hint={props.mode === "create" ? "ค้นหาจากรหัสลูกค้า 3BB ตามใบแจ้งหนี้" : "เปลี่ยนศูนย์ไม่ได้ ถ้าเลือกศูนย์ผิดให้ลบใบเบิกแล้วสร้างใหม่"}
         />
-      ) : (
-        center && <CenterCard center={center} />
-      )}
+        {props.mode === "create" ? (
+          <CenterLookup
+            initialCode={props.initialCode}
+            center={center}
+            onFound={(c) => {
+              setCenter(c);
+              setResultStale(true);
+            }}
+          />
+        ) : (
+          center && <CenterCard center={center} />
+        )}
+      </section>
 
-      {center && (
-        <form ref={formRef} onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
+      {center ? (
+        <form ref={formRef} onSubmit={handleSubmit} className="grid gap-x-4 gap-y-5 border-t border-slate-100 pt-8 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <StepTitle step={2} title="ข้อมูลตามใบแจ้งหนี้" hint="ใต้ช่องวันที่จะแสดงเป็น พ.ศ. ให้ตรวจอีกครั้ง" />
+          </div>
           {props.mode === "edit" && <input type="hidden" name="id" value={props.id} />}
           <input type="hidden" name="centerId" value={center.id} />
 
           <Field label="เลขที่ใบแจ้งหนี้" htmlFor="invoiceNo">
-            <input id="invoiceNo" name="invoiceNo" value={values.invoiceNo} onChange={update("invoiceNo")} required maxLength={50} className={`${inputClass} font-mono`} />
+            <input id="invoiceNo" name="invoiceNo" value={values.invoiceNo} onChange={update("invoiceNo")} required maxLength={50} className={`${inputClass} tabular-nums`} />
           </Field>
           <Field label="ยอดตามใบแจ้งหนี้ (บาท)" htmlFor="amount" hint={`ยอดปกติ ${formatAmount(center.normalAmount)} บาท`}>
             <input id="amount" name="amount" inputMode="decimal" value={values.amount} onChange={update("amount")} required placeholder="0.00" className={`${inputClass} tabular-nums`} />
@@ -109,21 +122,36 @@ export function RequestForm(props: Props) {
                 : `PDF, JPG หรือ PNG ไม่เกิน ${MAX_UPLOAD_LABEL}`
             }
           >
-            <input
-              id="invoiceFile"
-              name="invoiceFile"
-              type="file"
-              accept={ACCEPT_ATTR}
-              onChange={() => setResultStale(true)}
-              className="text-sm file:mr-3 file:rounded-md file:border file:border-zinc-300 file:bg-white file:px-3 file:py-1.5 file:text-sm hover:file:bg-zinc-50"
-            />
+            <label
+              htmlFor="invoiceFile"
+              className={cx(
+                "flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 text-sm transition hover:border-emerald-500 hover:bg-emerald-50/50 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-emerald-600/10",
+                fileName ? "border-emerald-400 bg-emerald-50/50 text-emerald-800" : "border-slate-300 bg-slate-50 text-slate-500",
+              )}
+            >
+              <Paperclip className="size-4 shrink-0" aria-hidden />
+              <span className="truncate">{fileName ?? "คลิกเพื่อเลือกไฟล์ใบแจ้งหนี้"}</span>
+              <input
+                id="invoiceFile"
+                name="invoiceFile"
+                type="file"
+                accept={ACCEPT_ATTR}
+                onChange={(e) => {
+                  setFileName(e.target.files?.[0]?.name ?? null);
+                  setResultStale(true);
+                }}
+                className="sr-only"
+              />
+            </label>
           </Field>
 
           <div className="flex flex-col gap-3 sm:col-span-2">
             {showResult && state.error && <Alert tone="error">{state.error}</Alert>}
             {blocks.length > 0 && (
               <Alert tone="error">
-                <p className="mb-1 font-medium">บันทึกไม่ได้</p>
+                <p className="mb-1 flex items-center gap-1.5 font-medium">
+                  <CircleAlert className="size-4" aria-hidden /> บันทึกไม่ได้
+                </p>
                 <ul className="list-disc pl-5">
                   {blocks.map((i) => (
                     <li key={i.code + i.message}>{i.message}</li>
@@ -133,7 +161,9 @@ export function RequestForm(props: Props) {
             )}
             {warnings.length > 0 && (
               <Alert tone="warning">
-                <p className="mb-1 font-medium">โปรดตรวจสอบก่อนบันทึก</p>
+                <p className="mb-1 flex items-center gap-1.5 font-medium">
+                  <TriangleAlert className="size-4" aria-hidden /> โปรดตรวจสอบก่อนบันทึก
+                </p>
                 <ul className="list-disc pl-5">
                   {warnings.map((i) => (
                     <li key={i.code}>{i.message}</li>
@@ -145,11 +175,11 @@ export function RequestForm(props: Props) {
 
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             {needsConfirm ? (
-              <Button type="button" onClick={confirmAndSubmit} disabled={saving}>
+              <Button type="button" icon={Check} onClick={confirmAndSubmit} disabled={saving}>
                 {saving ? "กำลังบันทึก…" : "ตรวจแล้ว ยืนยันบันทึก"}
               </Button>
             ) : (
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" icon={Check} disabled={saving}>
                 {saving ? "กำลังบันทึก…" : props.mode === "create" ? "สร้างใบเบิก" : "บันทึกการแก้ไข"}
               </Button>
             )}
@@ -158,6 +188,10 @@ export function RequestForm(props: Props) {
             </ButtonLink>
           </div>
         </form>
+      ) : (
+        <div className="border-t border-slate-100 pt-8 opacity-50">
+          <StepTitle step={2} title="ข้อมูลตามใบแจ้งหนี้" hint="ค้นหาศูนย์ให้เจอก่อน" />
+        </div>
       )}
     </div>
   );
@@ -168,8 +202,16 @@ function thaiHint(iso: string): string | undefined {
   return isISODate(iso) ? formatThaiDate(iso, "long") : undefined;
 }
 
-function CenterLookup({ center, onFound }: { center: CenterSummary | null; onFound: (c: CenterSummary) => void }) {
-  const [code, setCode] = useState("");
+function CenterLookup({
+  initialCode = "",
+  center,
+  onFound,
+}: {
+  initialCode?: string;
+  center: CenterSummary | null;
+  onFound: (c: CenterSummary) => void;
+}) {
+  const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
   const [searching, startSearch] = useTransition();
 
@@ -185,9 +227,15 @@ function CenterLookup({ center, onFound }: { center: CenterSummary | null; onFou
     });
   }
 
+  // มาจากลิงก์ "สร้างใบเบิก" ในหน้าสรุปรายศูนย์ → ค้นให้เลย
+  useEffect(() => {
+    if (initialCode) search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="flex flex-col gap-3">
-      <Field label="รหัสลูกค้า 3BB" htmlFor="customerCode" hint="พิมพ์รหัสลูกค้าตามใบแจ้งหนี้ แล้วกดค้นหา">
+      <Field label="รหัสลูกค้า 3BB" htmlFor="customerCode" hint="พิมพ์แล้วกด Enter หรือปุ่มค้นหา">
         <div className="flex gap-2">
           <input
             id="customerCode"
@@ -200,9 +248,9 @@ function CenterLookup({ center, onFound }: { center: CenterSummary | null; onFou
               }
             }}
             autoFocus
-            className={`${inputClass} max-w-xs font-mono`}
+            className={`${inputClass} max-w-xs tabular-nums`}
           />
-          <Button type="button" variant="secondary" onClick={search} disabled={searching || !code.trim()}>
+          <Button type="button" variant="secondary" icon={Search} onClick={search} disabled={searching || !code.trim()}>
             {searching ? "กำลังค้นหา…" : "ค้นหา"}
           </Button>
         </div>
@@ -215,22 +263,22 @@ function CenterLookup({ center, onFound }: { center: CenterSummary | null; onFou
 
 function CenterCard({ center }: { center: CenterSummary }) {
   return (
-    <div className="rounded-md border border-emerald-200 bg-emerald-50/50 px-4 py-3 text-sm">
+    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-base font-medium text-zinc-900">{center.name}</span>
+        <span className="text-base font-medium text-slate-900">{center.name}</span>
         <CenterStatusBadge status={center.status} />
       </div>
-      <dl className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-zinc-600">
+      <dl className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-slate-600">
         <div>
-          รหัสลูกค้า <span className="font-mono text-zinc-900">{center.customerCode}</span>
+          รหัสลูกค้า <span className="tabular-nums text-slate-900">{center.customerCode}</span>
         </div>
         {center.serviceNumber && (
           <div>
-            หมายเลขบริการ <span className="font-mono text-zinc-900">{center.serviceNumber}</span>
+            หมายเลขบริการ <span className="tabular-nums text-slate-900">{center.serviceNumber}</span>
           </div>
         )}
         <div>
-          ยอดปกติ <span className="tabular-nums text-zinc-900">{formatAmount(center.normalAmount)}</span> บาท
+          ยอดปกติ <span className="tabular-nums text-slate-900">{formatAmount(center.normalAmount)}</span> บาท
         </div>
         <div>ครบกำหนดทุกวันที่ {center.dueDay}</div>
       </dl>

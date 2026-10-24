@@ -7,7 +7,7 @@ export function TempPasswordNotice({ message, password }: { message?: string; pa
       {message && <p className="mb-2 font-medium">{message}</p>}
       <p>
         รหัสผ่านชั่วคราว:{" "}
-        <code className="rounded bg-white px-2 py-0.5 font-mono text-base tracking-wider text-zinc-900">{password}</code>
+        <code className="rounded bg-white px-2 py-0.5 tabular-nums text-base tracking-wider text-slate-900">{password}</code>
       </p>
       <p className="mt-2 text-xs">
         จดหรือคัดลอกส่งให้ผู้ใช้ตอนนี้ — รหัสนี้จะแสดงครั้งเดียว ผู้ใช้ต้องตั้งรหัสใหม่เองตอนล็อกอินครั้งแรก

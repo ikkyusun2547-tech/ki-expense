@@ -14,13 +14,17 @@ export const HOME_PATH: Record<Role, string> = {
 
 export type NavItem = { href: string; label: string };
 
+const SUMMARY: NavItem = { href: "/summary", label: "สรุปรายศูนย์" };
+
 export const NAV_ITEMS: Record<Role, NavItem[]> = {
-  CREATOR: [{ href: "/requests", label: "ใบเบิก" }],
-  ACCOUNTING: [{ href: "/accounting", label: "ฝ่ายบัญชี" }],
+  CREATOR: [{ href: "/requests", label: "ใบเบิก" }, SUMMARY],
+  ACCOUNTING: [{ href: "/accounting", label: "ฝ่ายบัญชี" }, SUMMARY],
   ADMIN: [
     { href: "/requests", label: "ใบเบิก" },
     { href: "/accounting", label: "ฝ่ายบัญชี" },
+    SUMMARY,
     { href: "/admin/centers", label: "ทะเบียนศูนย์" },
     { href: "/admin/users", label: "ผู้ใช้" },
+    { href: "/admin/settings", label: "ตั้งค่า" },
   ],
 };

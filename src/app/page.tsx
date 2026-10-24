@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/server/auth";
 // หน้าแรก: พาไปหน้าของบทบาทตัวเอง หรือหน้าล็อกอิน
 export default function Home() {
   return (
-    <Suspense fallback={<p className="p-8 text-sm text-zinc-500">กำลังโหลด…</p>}>
+    <Suspense fallback={<p className="p-8 text-sm text-slate-500">กำลังโหลด…</p>}>
       <RedirectByRole />
     </Suspense>
   );

@@ -84,9 +84,20 @@ export function formatThaiDateTime(date: Date): string {
   return `${formatThaiDate(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute}`;
 }
 
-// ใบเบิก PDF: ค.ศ. ตามฟอร์มเดิม เช่น "21/10/2026"
-// TODO(เฟส 4): ตรวจรูปแบบกับฟอร์มกระดาษ/prototype อีกครั้ง
-export function formatCEDate(iso: ISODate): string {
+// ใบเบิก (บันทึกภายใน FM-50000-02) ใช้ พ.ศ. ทั้งหมด
+
+// "12/11/2569"
+export function formatBEDate(iso: ISODate): string {
   const { y, m, d } = parts(iso);
-  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y + 543}`;
+}
+
+// "พฤศจิกายน"
+export function thaiMonthName(iso: ISODate): string {
+  return MONTHS_LONG[parts(iso).m - 1];
+}
+
+// ปี พ.ศ. ของวันที่ เช่น 2569
+export function beYear(iso: ISODate): number {
+  return parts(iso).y + 543;
 }

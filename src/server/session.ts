@@ -12,7 +12,7 @@ const SESSION_HOURS = 12;
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
-// production ต้องเปิด HTTPS (cookie secure); ตั้ง COOKIE_SECURE=false ได้ถ้าทดสอบผ่าน http ในวงแลน
+// cookie secure = ส่งเฉพาะ HTTPS; ระบบจริงใช้ http ในวงแลน จึงตั้ง COOKIE_SECURE=false ใน .env ของระบบจริง
 function cookieSecure(): boolean {
   const flag = process.env.COOKIE_SECURE;
   if (flag) return flag === "true";

@@ -40,10 +40,10 @@ export function CenterForm({ center = EMPTY }: { center?: CenterFormValues }) {
       )}
 
       <Field label="รหัสลูกค้า" htmlFor="customerCode" errors={errors.customerCode} hint="ใช้ค้นหาตอนสร้างใบเบิก ต้องไม่ซ้ำ">
-        <input id="customerCode" name="customerCode" defaultValue={v.customerCode} required aria-invalid={!!errors.customerCode} className={`${inputClass} font-mono`} />
+        <input id="customerCode" name="customerCode" defaultValue={v.customerCode} required aria-invalid={!!errors.customerCode} className={`${inputClass} tabular-nums`} />
       </Field>
       <Field label="หมายเลขบริการ" htmlFor="serviceNumber" errors={errors.serviceNumber} hint="ไม่บังคับ">
-        <input id="serviceNumber" name="serviceNumber" defaultValue={v.serviceNumber} aria-invalid={!!errors.serviceNumber} className={`${inputClass} font-mono`} />
+        <input id="serviceNumber" name="serviceNumber" defaultValue={v.serviceNumber} aria-invalid={!!errors.serviceNumber} className={`${inputClass} tabular-nums`} />
       </Field>
       <div className="sm:col-span-2">
         <Field label="ชื่อศูนย์" htmlFor="name" errors={errors.name}>

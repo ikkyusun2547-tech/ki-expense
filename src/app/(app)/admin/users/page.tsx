@@ -1,8 +1,16 @@
-import Link from "next/link";
-import { Badge, ButtonLink, PageHeader, tableClass, tdClass, thClass } from "@/components/ui";
+import { Plus, Users } from "lucide-react";
+import type { Role } from "@/generated/prisma/enums";
+import { Badge, ButtonLink, cx, PageHeader, RowLink, rowClass, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
 import { ROLE_LABEL } from "@/lib/status";
+import { nameInitial } from "@/lib/thai/name";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
+
+const ROLE_AVATAR: Record<Role, string> = {
+  CREATOR: "bg-sky-100 text-sky-800",
+  ACCOUNTING: "bg-amber-100 text-amber-800",
+  ADMIN: "bg-emerald-100 text-emerald-800",
+};
 
 export default async function UsersPage() {
   const admin = await requireRole("ADMIN");
@@ -12,17 +20,21 @@ export default async function UsersPage() {
   return (
     <>
       <PageHeader
+        icon={Users}
         title="ผู้ใช้"
-        description="ผู้ใช้ล็อกอินด้วยชื่อผู้ใช้และรหัสผ่านที่ admin สร้างให้ และต้องเปลี่ยนรหัสเองตอนล็อกอินครั้งแรก"
-        actions={<ButtonLink href="/admin/users/new">+ เพิ่มผู้ใช้</ButtonLink>}
+        description="พนักงานล็อกอินด้วยชื่อผู้ใช้และรหัสผ่านที่ admin สร้างให้ และต้องตั้งรหัสใหม่เองตอนล็อกอินครั้งแรก"
+        actions={
+          <ButtonLink href="/admin/users/new" icon={Plus}>
+            เพิ่มผู้ใช้
+          </ButtonLink>
+        }
       />
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+      <TableCard>
         <table className={tableClass}>
           <thead>
             <tr>
-              <th className={thClass}>ชื่อผู้ใช้</th>
-              <th className={thClass}>ชื่อ-นามสกุล</th>
+              <th className={thClass}>ผู้ใช้</th>
               <th className={thClass}>อีเมล</th>
               <th className={thClass}>บทบาท</th>
               <th className={thClass}>สถานะ</th>
@@ -31,33 +43,43 @@ export default async function UsersPage() {
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className={u.active ? "hover:bg-zinc-50" : "text-zinc-400"}>
-                <td className={`${tdClass} font-mono`}>
-                  {u.username}
-                  {u.id === admin.id && <span className="ml-2 text-xs text-zinc-400">(คุณ)</span>}
+              <tr key={u.id} className={cx(rowClass, !u.active && "opacity-60")}>
+                <td className={tdClass}>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cx("flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold", ROLE_AVATAR[u.role])}
+                      aria-hidden
+                    >
+                      {nameInitial(u.name)}
+                    </span>
+                    <div>
+                      <div className="font-medium text-slate-900">
+                        {u.name}
+                        {u.id === admin.id && <span className="ml-2 text-xs font-normal text-slate-400">(คุณ)</span>}
+                      </div>
+                      <div className="text-xs tabular-nums text-slate-400">{u.username}</div>
+                    </div>
+                  </div>
                 </td>
-                <td className={tdClass}>{u.name}</td>
-                <td className={tdClass}>{u.email ?? "–"}</td>
+                <td className={tdClass}>{u.email ?? <span className="text-slate-300">–</span>}</td>
                 <td className={tdClass}>{ROLE_LABEL[u.role]}</td>
                 <td className={tdClass}>
                   {!u.active ? (
                     <Badge tone="zinc">ปิดใช้งาน</Badge>
                   ) : u.mustChangePassword ? (
-                    <Badge tone="amber">รอเปลี่ยนรหัส</Badge>
+                    <Badge tone="amber">รอตั้งรหัสใหม่</Badge>
                   ) : (
                     <Badge tone="green">ใช้งาน</Badge>
                   )}
                 </td>
                 <td className={`${tdClass} text-right`}>
-                  <Link href={`/admin/users/${u.id}`} className="text-emerald-700 hover:underline">
-                    แก้ไข
-                  </Link>
+                  <RowLink href={`/admin/users/${u.id}`}>แก้ไข</RowLink>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </TableCard>
     </>
   );
 }
