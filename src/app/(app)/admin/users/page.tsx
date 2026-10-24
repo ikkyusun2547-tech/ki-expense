@@ -1,6 +1,6 @@
 import { Plus, Users } from "lucide-react";
 import type { Role } from "@/generated/prisma/enums";
-import { Badge, ButtonLink, cx, PageHeader, RowLink, rowClass, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
+import { Alert, Badge, ButtonLink, cx, PageHeader, RowLink, rowClass, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
 import { ROLE_LABEL } from "@/lib/status";
 import { nameInitial } from "@/lib/thai/name";
 import { requireRole } from "@/server/auth";
@@ -9,11 +9,13 @@ import { db } from "@/server/db";
 const ROLE_AVATAR: Record<Role, string> = {
   CREATOR: "bg-sky-100 text-sky-800",
   ACCOUNTING: "bg-amber-100 text-amber-800",
+  APPROVER: "bg-violet-100 text-violet-800",
   ADMIN: "bg-emerald-100 text-emerald-800",
 };
 
-export default async function UsersPage() {
+export default async function UsersPage({ searchParams }: PageProps<"/admin/users">) {
   const admin = await requireRole("ADMIN");
+  const { created } = await searchParams;
 
   const users = await db.user.findMany({ orderBy: [{ active: "desc" }, { username: "asc" }] });
 
@@ -22,13 +24,21 @@ export default async function UsersPage() {
       <PageHeader
         icon={Users}
         title="ผู้ใช้"
-        description="พนักงานล็อกอินด้วยชื่อผู้ใช้และรหัสผ่านที่ admin สร้างให้ และต้องตั้งรหัสใหม่เองตอนล็อกอินครั้งแรก"
+        description="สร้างบัญชีให้ผู้จัดทำ ฝ่ายบัญชี และผู้อนุมัติ — ผู้ใช้ต้องตั้งรหัสใหม่เองตอนล็อกอินครั้งแรก"
         actions={
           <ButtonLink href="/admin/users/new" icon={Plus}>
             เพิ่มผู้ใช้
           </ButtonLink>
         }
       />
+
+      {typeof created === "string" && (
+        <div className="mb-4">
+          <Alert tone="success">
+            สร้างบัญชี <span className="font-semibold">{created}</span> แล้ว — แจ้งชื่อผู้ใช้และรหัสผ่านเริ่มต้นให้เจ้าของบัญชี
+          </Alert>
+        </div>
+      )}
 
       <TableCard>
         <table className={tableClass}>
@@ -57,7 +67,10 @@ export default async function UsersPage() {
                         {u.name}
                         {u.id === admin.id && <span className="ml-2 text-xs font-normal text-slate-400">(คุณ)</span>}
                       </div>
-                      <div className="text-xs tabular-nums text-slate-400">{u.username}</div>
+                      <div className="text-xs text-slate-500">
+                        <span className="tabular-nums text-slate-400">{u.username}</span>
+                        {u.title && <> · {u.title}</>}
+                      </div>
                     </div>
                   </div>
                 </td>

@@ -1,4 +1,4 @@
-import { CircleCheck, FilePlus, FileText, Inbox, Plus, Receipt, Send } from "lucide-react";
+import { CircleCheck, FilePlus, FileText, Hourglass, Inbox, Plus, Receipt, Send } from "lucide-react";
 import type { RequestStatus } from "@/generated/prisma/enums";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import {
@@ -29,8 +29,9 @@ import { db } from "@/server/db";
 const STATUSES = Object.keys(STATUS_LABEL) as RequestStatus[];
 
 const STATUS_CARD: Record<RequestStatus, { icon: IconType; tone: BadgeTone; sub: string }> = {
-  CREATED: { icon: FileText, tone: "sky", sub: "รอพิมพ์/เซ็น แล้วส่งบัญชี" },
-  SENT: { icon: Send, tone: "amber", sub: "รอฝ่ายบัญชีจ่าย" },
+  CREATED: { icon: FileText, tone: "zinc", sub: "รอส่งขออนุมัติ" },
+  PENDING: { icon: Hourglass, tone: "amber", sub: "รอผู้อนุมัติ" },
+  APPROVED: { icon: Send, tone: "sky", sub: "รอฝ่ายบัญชีจ่าย" },
   PAID: { icon: CircleCheck, tone: "green", sub: "เสร็จสิ้น" },
 };
 
@@ -81,7 +82,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
         }
       />
 
-      <div className="mb-6 grid grid-cols-3 gap-3 sm:gap-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {STATUSES.map((s) => (
           <StatCard
             key={s}

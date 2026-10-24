@@ -41,27 +41,40 @@ describe("centerSchema", () => {
 });
 
 describe("userCreateSchema", () => {
+  const pw = { password: "start-pass-1", confirmPassword: "start-pass-1" };
+
   it("ชื่อผู้ใช้เป็นตัวพิมพ์เล็ก อีเมลว่างเป็น null", () => {
-    expect(userCreateSchema.parse({ username: " Somchai.K ", name: "สมชาย", email: "", role: "CREATOR" })).toEqual({
+    expect(userCreateSchema.parse({ username: " Somchai.K ", name: "สมชาย", title: "เจ้าหน้าที่", email: "", role: "CREATOR", ...pw })).toEqual({
       username: "somchai.k",
       name: "สมชาย",
+      title: "เจ้าหน้าที่",
       email: null,
       role: "CREATOR",
+      ...pw,
     });
   });
 
   it.each(["ab", "สมชาย", "has space", "a".repeat(33)])("ปฏิเสธชื่อผู้ใช้ %j", (username) => {
-    expect(userCreateSchema.safeParse({ username, name: "x", email: "", role: "CREATOR" }).success).toBe(false);
+    expect(userCreateSchema.safeParse({ username, name: "x", title: "x", email: "", role: "CREATOR", ...pw }).success).toBe(false);
   });
 
   it("ปฏิเสธอีเมลผิดรูปแบบ", () => {
-    expect(userCreateSchema.safeParse({ username: "abc", name: "x", email: "not-email", role: "CREATOR" }).success).toBe(false);
+    expect(userCreateSchema.safeParse({ username: "abc", name: "x", title: "x", email: "not-email", role: "CREATOR", ...pw }).success).toBe(false);
+  });
+
+  it("ตำแหน่งบังคับเฉพาะผู้จัดทำ/ผู้อนุมัติ; ฝ่ายบัญชีเว้นว่างได้ (เป็น null)", () => {
+    const base = { username: "abc", name: "x", title: " ", email: "", ...pw };
+    for (const role of ["CREATOR", "APPROVER"]) {
+      const r = userCreateSchema.safeParse({ ...base, role });
+      expect(r.success, role).toBe(false);
+    }
+    expect(userCreateSchema.parse({ ...base, role: "ACCOUNTING" }).title).toBeNull();
   });
 });
 
 describe("userUpdateSchema", () => {
   it("แปลง active เป็น boolean", () => {
-    expect(userUpdateSchema.parse({ name: "x", email: "", role: "ADMIN", active: "false" }).active).toBe(false);
+    expect(userUpdateSchema.parse({ username: "abc", name: "x", title: "", email: "", role: "ADMIN", active: "false" }).active).toBe(false);
   });
 });
 

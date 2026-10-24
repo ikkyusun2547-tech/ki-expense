@@ -21,7 +21,7 @@ afterAll(async () => {
 describe("ล็อกอิน", () => {
   it("รหัสถูก → ได้ cookie session และไปหน้าของบทบาท", async () => {
     await createTestUser("creator", "CREATOR");
-    expect(await loginAs("creator")).toEqual({ redirect: "/requests" });
+    expect(await loginAs("creator")).toEqual({ redirect: "/summary" });
     expect(cookieJar.size).toBe(1);
   });
 
@@ -68,7 +68,7 @@ describe("เปลี่ยนรหัสผ่าน", () => {
     const result = await run(() =>
       changePassword(initialFormState, form({ currentPassword: PASSWORD, newPassword: "brand-new-pass", confirmPassword: "brand-new-pass" })),
     );
-    expect(result).toEqual({ redirect: "/requests" });
+    expect(result).toEqual({ redirect: "/summary" });
     const updated = await db.user.findUniqueOrThrow({ where: { id: user.id } });
     expect(updated.mustChangePassword).toBe(false);
     expect(await verifyPassword("brand-new-pass", updated.passwordHash)).toBe(true);
@@ -151,23 +151,63 @@ describe("admin จัดการศูนย์", () => {
 });
 
 describe("admin จัดการผู้ใช้", () => {
-  it("สร้างผู้ใช้ → ได้รหัสชั่วคราวที่ใช้ล็อกอินได้ และต้องเปลี่ยนรหัส", async () => {
+  it("สร้างผู้ใช้ด้วยรหัสที่ admin ตั้ง → ล็อกอินได้ และต้องเปลี่ยนรหัส", async () => {
     await createTestUser("admin", "ADMIN");
     await loginAs("admin");
-    const created = await run(() =>
-      createUser(initialFormState, form({ username: `${PREFIX}Somchai`, name: "สมชาย", email: "", role: "ACCOUNTING" })),
-    );
-    expect(created).toMatchObject({ result: { tempPassword: expect.stringMatching(/^.{10}$/) } });
-    const temp = (created as { result: { tempPassword: string } }).result.tempPassword;
+    const values = { username: `${PREFIX}Somchai`, name: "สมชาย", title: "", email: "", role: "ACCOUNTING", password: "start-pass-1", confirmPassword: "start-pass-1" };
+    expect(await run(() => createUser(initialFormState, form(values)))).toEqual({
+      redirect: `/admin/users?created=${encodeURIComponent(`${PREFIX}somchai`)}`,
+    });
 
     cookieJar.clear();
-    expect(await loginAs("somchai", temp)).toEqual({ redirect: "/change-password" });
+    expect(await loginAs("somchai", "start-pass-1")).toEqual({ redirect: "/change-password" });
+  });
+
+  it("สร้างผู้ใช้: รหัสสั้น/ไม่ตรงกันไม่ได้, ผู้จัดทำและผู้อนุมัติต้องมีตำแหน่ง, ไม่ส่งรหัสกลับไปในฟอร์ม", async () => {
+    await createTestUser("admin", "ADMIN");
+    await loginAs("admin");
+    const base = { username: `${PREFIX}approver1`, name: "นายผู้อนุมัติ", title: "", email: "", role: "APPROVER", password: "start-pass-1", confirmPassword: "start-pass-1" };
+
+    const short = await run(() => createUser(initialFormState, form({ ...base, title: "ผู้จัดการ", password: "short", confirmPassword: "short" })));
+    expect(short).toMatchObject({ result: { fieldErrors: { password: ["รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร"] } } });
+    expect((short as { result: { values: Record<string, string> } }).result.values).not.toHaveProperty("password");
+
+    expect(await run(() => createUser(initialFormState, form({ ...base, title: "ผู้จัดการ", confirmPassword: "other-pass" })))).toMatchObject({
+      result: { fieldErrors: { confirmPassword: ["รหัสผ่านทั้งสองช่องไม่ตรงกัน"] } },
+    });
+    expect(await run(() => createUser(initialFormState, form(base)))).toMatchObject({
+      result: { fieldErrors: { title: ["กรอกตำแหน่ง (พิมพ์ใต้ชื่อในใบเบิก)"] } },
+    });
+
+    expect(await run(() => createUser(initialFormState, form({ ...base, title: "ผู้จัดการส่วน" })))).toMatchObject({ redirect: expect.any(String) });
+    expect(await db.user.findUniqueOrThrow({ where: { username: `${PREFIX}approver1` } })).toMatchObject({
+      role: "APPROVER",
+      title: "ผู้จัดการส่วน",
+      mustChangePassword: true,
+    });
+  });
+
+  it("admin เปลี่ยนชื่อผู้ใช้ได้ (ตัวพิมพ์เล็ก, ห้ามซ้ำ) → ล็อกอินด้วยชื่อใหม่", async () => {
+    await createTestUser("admin", "ADMIN");
+    const target = await createTestUser("oldname", "ACCOUNTING");
+    await loginAs("admin");
+    const values = { id: target.id, name: "x", title: "", email: "", role: "ACCOUNTING", active: "true" };
+
+    expect(await run(() => updateUser(initialFormState, form({ ...values, username: `${PREFIX}admin` })))).toMatchObject({
+      result: { fieldErrors: { username: ["ชื่อผู้ใช้นี้มีอยู่แล้ว"] } },
+    });
+    expect(await run(() => updateUser(initialFormState, form({ ...values, username: ` ${PREFIX}User3 ` })))).toEqual({ redirect: "/admin/users" });
+    expect((await db.user.findUniqueOrThrow({ where: { id: target.id } })).username).toBe(`${PREFIX}user3`);
+
+    cookieJar.clear();
+    expect(await loginAs("oldname")).toMatchObject({ result: { error: expect.any(String) } });
+    expect(await loginAs("user3")).toEqual({ redirect: "/accounting" });
   });
 
   it("admin เปลี่ยนบทบาท/ปิดบัญชีตัวเองไม่ได้", async () => {
     const admin = await createTestUser("admin", "ADMIN");
     await loginAs("admin");
-    const result = await run(() => updateUser(initialFormState, form({ id: admin.id, name: "x", email: "", role: "CREATOR", active: "true" })));
+    const result = await run(() => updateUser(initialFormState, form({ id: admin.id, username: `${PREFIX}admin`, name: "x", title: "ตำแหน่ง", email: "", role: "CREATOR", active: "true" })));
     expect(result).toMatchObject({ result: { error: "เปลี่ยนบทบาทหรือปิดบัญชีของตัวเองไม่ได้" } });
     expect((await db.user.findUniqueOrThrow({ where: { id: admin.id } })).role).toBe("ADMIN");
   });
@@ -181,8 +221,14 @@ describe("admin จัดการผู้ใช้", () => {
     cookieJar.clear();
     await createTestUser("admin", "ADMIN");
     await loginAs("admin");
-    const reset = await run(() => resetPassword(initialFormState, form({ id: target.id })));
-    expect(reset).toMatchObject({ result: { tempPassword: expect.any(String) } });
+    expect(await run(() => resetPassword(initialFormState, form({ id: target.id, password: "new-pass-1", confirmPassword: "x" })))).toMatchObject({
+      result: { fieldErrors: { confirmPassword: ["รหัสผ่านทั้งสองช่องไม่ตรงกัน"] } },
+    });
+    expect(await db.session.count({ where: { userId: target.id } })).toBe(1);
+
+    const reset = await run(() => resetPassword(initialFormState, form({ id: target.id, password: "new-pass-1", confirmPassword: "new-pass-1" })));
+    expect(reset).toMatchObject({ result: { message: expect.stringContaining("ตั้งรหัสผ่านใหม่แล้ว") } });
+    expect(await verifyPassword("new-pass-1", (await db.user.findUniqueOrThrow({ where: { id: target.id } })).passwordHash)).toBe(true);
     expect(await db.session.count({ where: { userId: target.id } })).toBe(0);
     expect((await db.user.findUniqueOrThrow({ where: { id: target.id } })).mustChangePassword).toBe(true);
 

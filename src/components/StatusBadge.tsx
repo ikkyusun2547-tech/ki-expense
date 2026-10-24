@@ -3,8 +3,9 @@ import { Badge, type BadgeTone } from "@/components/ui";
 import { CENTER_STATUS_LABEL, STATUS_LABEL } from "@/lib/status";
 
 const REQUEST_TONE: Record<RequestStatus, BadgeTone> = {
-  CREATED: "sky",
-  SENT: "amber",
+  CREATED: "zinc",
+  PENDING: "amber",
+  APPROVED: "sky",
   PAID: "green",
 };
 

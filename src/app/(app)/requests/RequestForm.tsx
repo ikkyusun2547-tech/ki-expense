@@ -1,11 +1,12 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
-import { Check, CircleAlert, Paperclip, Search, TriangleAlert } from "lucide-react";
+import { Check, CircleAlert, Paperclip, Search, Send, Sparkles, TriangleAlert } from "lucide-react";
 import { CenterStatusBadge } from "@/components/StatusBadge";
 import { Alert, Button, ButtonLink, cx, Field, inputClass, StepTitle } from "@/components/ui";
 import { ACCEPT_ATTR, MAX_UPLOAD_LABEL } from "@/lib/files";
 import { formatAmount } from "@/lib/money";
+import type { RequestSuggestion } from "@/lib/rules/requestDefaults";
 import { daysInclusive, formatThaiDate, isISODate } from "@/lib/thai/date";
 import { findCenterByCode, saveRequest, type CenterSummary, type RequestFormState } from "@/server/actions/requests";
 
@@ -17,9 +18,15 @@ export type RequestFormValues = {
   dueDate: string;
 };
 
-type Props =
+import type { ApproverOption } from "@/server/services/approvers";
+
+// approverId = ผู้อนุมัติที่เลือกไว้ (สร้างใหม่: คนที่ผู้จัดทำเลือกครั้งล่าสุด)
+type Props = { approvers: ApproverOption[]; approverId: string } & (
   | { mode: "create"; initialCode?: string }
-  | { mode: "edit"; id: string; center: CenterSummary; values: RequestFormValues; existingFileName: string | null };
+  | { mode: "edit"; id: string; center: CenterSummary; values: RequestFormValues; existingFileName: string | null }
+);
+
+type Intent = "submit" | "save";
 
 const EMPTY: RequestFormValues = { invoiceNo: "", amount: "", periodStart: "", periodEnd: "", dueDate: "" };
 
@@ -28,12 +35,16 @@ export function RequestForm(props: Props) {
   const [, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const confirmRef = useRef(false);
+  const [intent, setIntent] = useState<Intent>("submit");
 
   const [center, setCenter] = useState<CenterSummary | null>(props.mode === "edit" ? props.center : null);
   const [values, setValues] = useState<RequestFormValues>(props.mode === "edit" ? props.values : EMPTY);
   // ผลตรวจล่าสุดใช้ได้เฉพาะกับค่าที่ส่งไป — แก้ช่องใดก็ตามแล้วซ่อนผลเดิม
   const [resultStale, setResultStale] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [approverId, setApproverId] = useState(props.approverId);
+  const [suggested, setSuggested] = useState<RequestSuggestion | null>(null);
+  const approver = props.approvers.find((a) => a.id === approverId);
 
   const update = (key: keyof RequestFormValues) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setValues((v) => ({ ...v, [key]: e.target.value }));
@@ -41,9 +52,14 @@ export function RequestForm(props: Props) {
   };
 
   // ส่งเองแทน <form action> เพราะ React จะล้างฟอร์ม (รวมไฟล์ที่เลือก) หลังส่งทุกครั้ง
+  // ปุ่มที่กด (ส่งขออนุมัติ / บันทึกไว้ก่อน) จำไว้ใช้ตอนกด "ตรวจแล้ว ยืนยัน" รอบถัดไป
   function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const chosen: Intent = submitter?.value === "submit" || submitter?.value === "save" ? submitter.value : intent;
+    setIntent(chosen);
     const data = new FormData(e.currentTarget);
+    data.set("intent", chosen);
     data.set("confirmWarnings", confirmRef.current ? "1" : "0");
     confirmRef.current = false;
     setResultStale(false);
@@ -76,9 +92,14 @@ export function RequestForm(props: Props) {
           <CenterLookup
             initialCode={props.initialCode}
             center={center}
-            onFound={(c) => {
+            onFound={(c, suggestion) => {
               setCenter(c);
+              // กรอกให้ล่วงหน้า (ยอดปกติ / รอบถัดไป / วันครบกำหนด) — เลขที่ใบแจ้งหนี้ที่พิมพ์ไว้แล้วคงเดิม
+              setValues((v) => ({ ...v, ...suggestion }));
+              setSuggested(suggestion);
               setResultStale(true);
+              // ช่องที่ต้องพิมพ์เองทุกครั้ง → วางเคอร์เซอร์ให้เลย
+              requestAnimationFrame(() => document.getElementById("invoiceNo")?.focus());
             }}
           />
         ) : (
@@ -90,6 +111,14 @@ export function RequestForm(props: Props) {
         <form ref={formRef} onSubmit={handleSubmit} className="grid gap-x-4 gap-y-5 border-t border-slate-100 pt-8 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <StepTitle step={2} title="ข้อมูลตามใบแจ้งหนี้" hint="ใต้ช่องวันที่จะแสดงเป็น พ.ศ. ให้ตรวจอีกครั้ง" />
+            {suggested && (
+              <p className="-mt-2 flex items-start gap-1.5 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                {suggested.periodStart
+                  ? "กรอกยอดปกติ รอบบริการถัดจากใบล่าสุด และวันครบกำหนดให้แล้ว — ตรวจให้ตรงใบแจ้งหนี้ แล้วกรอกเลขที่ใบแจ้งหนี้ + แนบไฟล์"
+                  : "กรอกยอดปกติและวันครบกำหนดให้แล้ว (ศูนย์นี้ยังไม่เคยเบิก จึงต้องกรอกรอบบริการเอง)"}
+              </p>
+            )}
           </div>
           {props.mode === "edit" && <input type="hidden" name="id" value={props.id} />}
           <input type="hidden" name="centerId" value={center.id} />
@@ -145,6 +174,40 @@ export function RequestForm(props: Props) {
             </label>
           </Field>
 
+          <div className="border-t border-slate-100 pt-8 sm:col-span-2">
+            <StepTitle step={3} title="ผู้อนุมัติ" hint="ระบบจำคนที่เลือกครั้งล่าสุดไว้ให้" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="ชื่อผู้อนุมัติ" htmlFor="approverId">
+                <select
+                  id="approverId"
+                  name="approverId"
+                  value={approverId}
+                  onChange={(e) => {
+                    setApproverId(e.target.value);
+                    setResultStale(true);
+                  }}
+                  className={inputClass}
+                >
+                  <option value="">— เลือกผู้อนุมัติ —</option>
+                  {props.approvers.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <div>
+                <div className="text-sm font-medium text-slate-700">ตำแหน่ง</div>
+                <div className="mt-1.5 flex h-10 items-center rounded-lg bg-slate-100 px-3 text-sm text-slate-800">
+                  {approver?.title || <span className="text-slate-400">–</span>}
+                </div>
+              </div>
+            </div>
+            {props.approvers.length === 0 && (
+              <p className="mt-2 text-xs text-amber-700">ยังไม่มีบัญชีผู้อนุมัติในระบบ — แจ้งผู้ดูแลระบบให้สร้าง (บันทึกไว้ก่อนได้)</p>
+            )}
+          </div>
+
           <div className="flex flex-col gap-3 sm:col-span-2">
             {showResult && state.error && <Alert tone="error">{state.error}</Alert>}
             {blocks.length > 0 && (
@@ -175,15 +238,20 @@ export function RequestForm(props: Props) {
 
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             {needsConfirm ? (
-              <Button type="button" icon={Check} onClick={confirmAndSubmit} disabled={saving}>
-                {saving ? "กำลังบันทึก…" : "ตรวจแล้ว ยืนยันบันทึก"}
+              <Button type="button" icon={intent === "submit" ? Send : Check} onClick={confirmAndSubmit} disabled={saving}>
+                {saving ? "กำลังบันทึก…" : intent === "submit" ? "ตรวจแล้ว ยืนยันส่งขออนุมัติ" : "ตรวจแล้ว ยืนยันบันทึก"}
               </Button>
             ) : (
-              <Button type="submit" icon={Check} disabled={saving}>
-                {saving ? "กำลังบันทึก…" : props.mode === "create" ? "สร้างใบเบิก" : "บันทึกการแก้ไข"}
-              </Button>
+              <>
+                <Button type="submit" name="intent" value="submit" icon={Send} disabled={saving || !approverId}>
+                  {saving ? "กำลังบันทึก…" : props.mode === "create" ? "สร้างและส่งขออนุมัติ" : "บันทึกและส่งขออนุมัติ"}
+                </Button>
+                <Button type="submit" name="intent" value="save" variant="secondary" icon={Check} disabled={saving}>
+                  {props.mode === "create" ? "บันทึกไว้ก่อน" : "บันทึกการแก้ไข"}
+                </Button>
+              </>
             )}
-            <ButtonLink href={props.mode === "edit" ? `/requests/${props.id}` : "/requests"} variant="secondary">
+            <ButtonLink href={props.mode === "edit" ? `/requests/${props.id}` : "/summary"} variant="ghost">
               ยกเลิก
             </ButtonLink>
           </div>
@@ -209,7 +277,7 @@ function CenterLookup({
 }: {
   initialCode?: string;
   center: CenterSummary | null;
-  onFound: (c: CenterSummary) => void;
+  onFound: (c: CenterSummary, suggestion: RequestSuggestion) => void;
 }) {
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
@@ -220,7 +288,7 @@ function CenterLookup({
       const result = await findCenterByCode(code);
       if (result.ok) {
         setError(null);
-        onFound(result.center);
+        onFound(result.center, result.suggestion);
       } else {
         setError(result.error);
       }

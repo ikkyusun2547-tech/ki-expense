@@ -43,7 +43,7 @@ describe("summarizeCenter (วันนี้ 22 ต.ค. 2569)", () => {
   });
 
   it("มีใบเบิกที่ครบกำหนดเดือนนี้ (สถานะใดก็ได้) → เบิกแล้ว", () => {
-    const r = req("2026-10-18", "SENT");
+    const r = req("2026-10-18", "APPROVED");
     expect(summarizeCenter(15, [r], today)).toEqual({ state: "REQUESTED", dueDate: "2026-10-15", daysLeft: -7, request: r });
   });
 

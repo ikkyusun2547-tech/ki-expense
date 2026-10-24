@@ -8,7 +8,9 @@ import { updateUser } from "@/server/actions/users";
 
 export type EditUserValues = {
   id: string;
+  username: string;
   name: string;
+  title: string;
   email: string;
   role: string;
   active: string; // "true" | "false"
@@ -27,8 +29,24 @@ export function EditUserForm({ user, isSelf }: { user: EditUserValues; isSelf: b
           <Alert tone="error">{state.error}</Alert>
         </div>
       )}
+      <Field label="ชื่อผู้ใช้ (ใช้ล็อกอิน)" htmlFor="username" errors={errors.username} hint="a-z 0-9 . _ - (3-32 ตัว) — เปลี่ยนแล้วต้องแจ้งเจ้าของบัญชี">
+        <input
+          id="username"
+          name="username"
+          defaultValue={v.username}
+          required
+          autoCapitalize="none"
+          autoComplete="off"
+          aria-invalid={!!errors.username}
+          className={`${inputClass} tabular-nums`}
+        />
+      </Field>
+      <div className="hidden sm:block" />
       <Field label="ชื่อ-นามสกุล" htmlFor="name" errors={errors.name}>
         <input id="name" name="name" defaultValue={v.name} required aria-invalid={!!errors.name} className={inputClass} />
+      </Field>
+      <Field label="ตำแหน่ง" htmlFor="title" errors={errors.title} hint="พิมพ์ใต้ชื่อในใบเบิก — บังคับสำหรับผู้จัดทำและผู้อนุมัติ">
+        <input id="title" name="title" defaultValue={v.title} aria-invalid={!!errors.title} className={inputClass} />
       </Field>
       <Field label="อีเมล" htmlFor="email" errors={errors.email} hint="ไม่บังคับ">
         <input id="email" name="email" type="email" defaultValue={v.email} aria-invalid={!!errors.email} className={inputClass} />

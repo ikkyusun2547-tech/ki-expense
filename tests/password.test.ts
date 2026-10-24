@@ -1,13 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateTempPassword, hashPassword, verifyPassword } from "@/server/password";
-
-describe("generateTempPassword", () => {
-  it("ยาว 10 ตัว ไม่มีตัวที่สับสนง่าย และไม่ซ้ำกัน", () => {
-    const passwords = Array.from({ length: 50 }, () => generateTempPassword());
-    for (const p of passwords) expect(p).toMatch(/^[A-HJ-NP-Za-km-np-z2-9]{10}$/);
-    expect(new Set(passwords).size).toBe(50);
-  });
-});
+import { hashPassword, verifyPassword } from "@/server/password";
 
 describe("hashPassword / verifyPassword", () => {
   it("รหัสถูกผ่าน รหัสผิดไม่ผ่าน", async () => {

@@ -10,7 +10,7 @@ import { PDF, pdfFile, requestFixtures } from "./requestFixtures";
 import { cookieJar } from "./setup";
 
 // prefix ต่างจาก auth test (zz-test-) เพราะข้อมูลชุดนี้มี ApprovalLog ซึ่งลบไม่ได้
-const { createUsers, loginAs, center: makeCenter, valid, save, idFrom, status } = requestFixtures("zz-req-");
+const { createUsers, loginAs, center: makeCenter, valid, save, idFrom, status, pendingRequest } = requestFixtures("zz-req-");
 const center = (status?: "ACTIVE" | "MOVED" | "CLOSED") => makeCenter({ status });
 
 const countUploads = () => readdirSync(process.env.UPLOAD_DIR!, { recursive: true }).filter((f) => String(f).includes(".")).length;
@@ -118,7 +118,7 @@ describe("สร้างใบเบิก", () => {
   });
 });
 
-describe("แก้ไข / ส่งบัญชี / ลบ / ย้อนสถานะ", () => {
+describe("แก้ไข / ส่งขออนุมัติ / ลบ / ย้อนสถานะ", () => {
   it("แก้ไขใบ 'สร้างแล้ว' ได้ เปลี่ยนไฟล์แล้วไฟล์เดิมยังเก็บไว้", async () => {
     const c = await center();
     await loginAs("CREATOR");
@@ -143,18 +143,16 @@ describe("แก้ไข / ส่งบัญชี / ลบ / ย้อนส�
     expect((await db.request.findUniqueOrThrow({ where: { id } })).invoiceFileKey).toBe(key);
   });
 
-  it("ส่งบัญชีแล้ว → แก้/ลบไม่ได้; ผู้จัดทำย้อนไม่ได้; admin ย้อนได้เมื่อระบุเหตุผล", async () => {
+  it("ส่งขออนุมัติแล้ว → แก้/ลบไม่ได้; ผู้จัดทำย้อนไม่ได้; admin ย้อนได้เมื่อระบุเหตุผล", async () => {
     const c = await center();
+    const id = await pendingRequest(c.id);
+    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("PENDING");
+
     await loginAs("CREATOR");
-    const id = idFrom(await save(valid(c.id)));
-
-    expect(await status(id, "SEND")).toEqual({ redirect: `/requests/${id}` });
-    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("SENT");
-
     expect(await save({ ...valid(c.id, { invoiceNo: "X" }), id })).toMatchObject({
-      result: { error: 'ใบเบิกสถานะ "ส่งบัญชีแล้ว" แก้ไขไม่ได้' },
+      result: { error: 'ใบเบิกสถานะ "รออนุมัติ" แก้ไขไม่ได้' },
     });
-    expect(await status(id, "DELETE")).toEqual({ result: { error: 'ใบเบิกสถานะ "ส่งบัญชีแล้ว" ลบไม่ได้' } });
+    expect(await status(id, "DELETE")).toEqual({ result: { error: 'ใบเบิกสถานะ "รออนุมัติ" ลบไม่ได้' } });
     expect(await status(id, "REVERT", "พิมพ์ผิด")).toEqual({ result: { error: "ผู้จัดทำไม่มีสิทธิ์ย้อนสถานะ" } });
 
     await loginAs("ADMIN");
@@ -165,8 +163,9 @@ describe("แก้ไข / ส่งบัญชี / ลบ / ย้อนส�
     expect(r.status).toBe("CREATED");
     expect(r.logs.map((l) => [l.action, l.fromStatus, l.toStatus, l.note])).toEqual([
       ["CREATE", null, "CREATED", null],
-      ["SEND", "CREATED", "SENT", null],
-      ["REVERT", "SENT", "CREATED", "ยอดผิด ให้ผู้จัดทำแก้"],
+      ["EDIT", "CREATED", "CREATED", "เปลี่ยนผู้ลงนาม — ผู้อนุมัติ: ทดสอบ approver (ผู้จัดการส่วน)"],
+      ["SUBMIT", "CREATED", "PENDING", null],
+      ["REVERT", "PENDING", "CREATED", "ยอดผิด ให้ผู้จัดทำแก้"],
     ]);
   });
 
@@ -181,7 +180,7 @@ describe("แก้ไข / ส่งบัญชี / ลบ / ย้อนส�
     expect(deleted.logs.map((l) => l.action).sort()).toEqual(["CREATE", "DELETE"]);
 
     idFrom(await save(valid(c.id)));
-    expect(await status(id, "SEND")).toEqual({ result: { error: "ไม่พบใบเบิกนี้" } });
+    expect(await status(id, "SUBMIT")).toEqual({ result: { error: "ไม่พบใบเบิกนี้" } });
   });
 
   it("ฝ่ายบัญชีเรียกปุ่มเปลี่ยนสถานะไม่ได้", async () => {
@@ -189,7 +188,7 @@ describe("แก้ไข / ส่งบัญชี / ลบ / ย้อนส�
     await loginAs("CREATOR");
     const id = idFrom(await save(valid(c.id)));
     await loginAs("ACCOUNTING");
-    expect(await status(id, "SEND")).toEqual({ redirect: "/" });
+    expect(await status(id, "SUBMIT")).toEqual({ redirect: "/" });
     expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("CREATED");
   });
 

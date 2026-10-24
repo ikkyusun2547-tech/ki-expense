@@ -1,4 +1,4 @@
-import { buildMemo } from "@/lib/pdf/memoData";
+import { buildMemo, chosenSignersOf } from "@/lib/pdf/memoData";
 import { toISODate, todayISO } from "@/lib/thai/date";
 import { requireUser } from "@/server/auth";
 import { db } from "@/server/db";
@@ -12,7 +12,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/requests/[i
   const { id } = await ctx.params;
   const request = await db.request.findUnique({
     where: { id },
-    include: { center: { select: { name: true, customerCode: true } }, createdBy: { select: { name: true } } },
+    include: { center: { select: { name: true, customerCode: true } }, createdBy: { select: { name: true, title: true } } },
   });
   if (!request || request.deletedAt) return new Response("ไม่พบใบเบิกนี้", { status: 404 });
 
@@ -23,7 +23,9 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/requests/[i
       serviceUser: request.center.name,
       amount: request.amount,
       dueDate: toISODate(request.dueDate),
-      requesterName: request.createdBy.name,
+      creator: request.createdBy,
+      signers: chosenSignersOf(request),
+      approvedAt: request.approvedAt,
       settings: await getReportSettings(),
     }),
   );

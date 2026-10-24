@@ -7,7 +7,7 @@ import { getCenterSummaries } from "@/server/services/summary";
 import { form, run } from "./helpers";
 import { requestFixtures } from "./requestFixtures";
 
-const { createUsers, loginAs, center, valid, save, idFrom, status, sentRequest } = requestFixtures("zz-acc-");
+const { createUsers, loginAs, center, valid, save, idFrom, status, approvedRequest } = requestFixtures("zz-acc-");
 
 const pay = (id: string, paidDate: string, paymentRef: string, returnTo = "list") =>
   run(() => recordPayment(initialFormState, form({ id, paidDate, paymentRef, returnTo })));
@@ -16,9 +16,9 @@ beforeAll(createUsers);
 afterAll(() => db.$disconnect());
 
 describe("ฝ่ายบัญชีบันทึกการจ่าย", () => {
-  it("ใบที่ส่งบัญชีแล้ว → จ่ายแล้ว พร้อมวันที่จ่าย เลขอ้างอิง และ log", async () => {
+  it("ใบที่อนุมัติแล้ว → จ่ายแล้ว พร้อมวันที่จ่าย เลขอ้างอิง และ log", async () => {
     const c = await center();
-    const id = await sentRequest(c.id);
+    const id = await approvedRequest(c.id);
 
     await loginAs("ACCOUNTING");
     expect(await pay(id, "2026-10-20", " PV-001 ")).toEqual({ redirect: "/accounting?paid=1" });
@@ -29,7 +29,7 @@ describe("ฝ่ายบัญชีบันทึกการจ่าย", (
     expect(r.paymentRef).toBe("PV-001");
     expect(r.logs.at(-1)).toMatchObject({
       action: "PAY",
-      fromStatus: "SENT",
+      fromStatus: "APPROVED",
       toStatus: "PAID",
       note: "จ่ายวันที่ 20 ต.ค. 2569 เลขอ้างอิง PV-001",
     });
@@ -37,24 +37,24 @@ describe("ฝ่ายบัญชีบันทึกการจ่าย", (
 
   it("จากหน้ารายละเอียด → กลับไปหน้ารายละเอียด", async () => {
     const c = await center();
-    const id = await sentRequest(c.id);
+    const id = await approvedRequest(c.id);
     await loginAs("ACCOUNTING");
     expect(await pay(id, "2026-10-20", "PV-002", "detail")).toEqual({ redirect: `/requests/${id}` });
   });
 
   it("ต้องกรอกวันที่และเลขอ้างอิง วันที่ห้ามเกินวันนี้ — ไม่ผ่านแล้วไม่มีอะไรเปลี่ยน", async () => {
     const c = await center();
-    const id = await sentRequest(c.id);
+    const id = await approvedRequest(c.id);
     await loginAs("ACCOUNTING");
 
     expect(await pay(id, "", "")).toMatchObject({
       result: { fieldErrors: { paidDate: ["กรอกวันที่จ่าย"], paymentRef: ["กรอกเลขอ้างอิงการจ่าย"] } },
     });
     expect(await pay(id, "2999-01-01", "PV")).toMatchObject({ result: { fieldErrors: { paidDate: ["วันที่จ่ายต้องไม่เกินวันนี้"] } } });
-    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("SENT");
+    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("APPROVED");
   });
 
-  it("ใบที่ยังไม่ส่งบัญชี จ่ายไม่ได้", async () => {
+  it("ใบที่ยังไม่อนุมัติ จ่ายไม่ได้", async () => {
     const c = await center();
     await loginAs("CREATOR");
     const id = idFrom(await save(valid(c.id)));
@@ -66,15 +66,15 @@ describe("ฝ่ายบัญชีบันทึกการจ่าย", (
 
   it.each(["CREATOR", "ADMIN"] as const)("%s บันทึกการจ่ายไม่ได้", async (role) => {
     const c = await center();
-    const id = await sentRequest(c.id);
+    const id = await approvedRequest(c.id);
     await loginAs(role);
     expect(await pay(id, "2026-10-20", "PV")).toEqual({ redirect: "/" });
-    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("SENT");
+    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("APPROVED");
   });
 
   it("จ่ายแล้วล็อก: จ่ายซ้ำ/ย้อนสถานะ/แก้ไข/ลบ ไม่ได้", async () => {
     const c = await center();
-    const id = await sentRequest(c.id);
+    const id = await approvedRequest(c.id);
     await loginAs("ACCOUNTING");
     await pay(id, "2026-10-20", "PV-LOCK");
 
@@ -100,12 +100,12 @@ describe("ตารางสรุปรายศูนย์ (อ่านจ�
     const soon = await center({ dueDay: 25 });
     const notYet = await center({ dueDay: 31 });
     const requested = await center({ dueDay: 15 });
-    const id = await sentRequest(requested.id, { dueDate: "2026-10-15" });
+    const id = await approvedRequest(requested.id, { dueDate: "2026-10-15" });
 
     expect(await rowOf(overdue.id)).toMatchObject({ state: "OVERDUE", dueDate: "2026-10-15", daysLeft: -7 });
     expect(await rowOf(soon.id)).toMatchObject({ state: "DUE_SOON", dueDate: "2026-10-25", daysLeft: 3 });
     expect(await rowOf(notYet.id)).toMatchObject({ state: "NOT_YET", dueDate: "2026-10-31", daysLeft: 9 });
-    expect(await rowOf(requested.id)).toMatchObject({ state: "REQUESTED", request: { id, status: "SENT" } });
+    expect(await rowOf(requested.id)).toMatchObject({ state: "REQUESTED", request: { id, status: "APPROVED" } });
   });
 
   it("ใบเบิกที่ถูกลบไม่นับว่าเบิกแล้ว", async () => {

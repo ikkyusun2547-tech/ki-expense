@@ -54,6 +54,7 @@ const styles = StyleSheet.create({
   signature: { width: 270, alignItems: "center", marginBottom: 38 },
   signLine: { flexDirection: "row", alignSelf: "stretch" },
   signRole: { width: 66, textAlign: "right" },
+  approvedNote: { marginTop: 2, fontSize: SIZE.pageNo, color: "#333" },
   formCode: { marginTop: 5, fontSize: SIZE.formCode, color: "#333" },
 });
 
@@ -150,7 +151,7 @@ export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | 
 
           <View style={styles.signatures}>
             <Signature role="ผู้ขออนุมัติ" person={data.requester} />
-            <Signature role="ผู้อนุมัติ" person={data.approver} />
+            <Signature role="ผู้อนุมัติ" person={data.approver} note={data.approvedNote} />
           </View>
         </View>
 
@@ -162,7 +163,8 @@ export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | 
 
 const DOTS = "..................................................";
 
-function Signature({ role, person }: { role: string; person: { name: string; title: string } }) {
+// ชื่อ/ตำแหน่งว่าง (ยังไม่เลือกผู้อนุมัติ) → จุดไข่ปลาให้เขียนมือ; note = เวลาที่อนุมัติในระบบ
+function Signature({ role, person, note }: { role: string; person: { name: string; title: string }; note?: string | null }) {
   return (
     <View style={styles.signature}>
       <View style={styles.signLine}>
@@ -170,7 +172,8 @@ function Signature({ role, person }: { role: string; person: { name: string; tit
         <T>{DOTS}</T>
       </View>
       <T>{`(${person.name || DOTS})`}</T>
-      <T>{person.title}</T>
+      <T>{person.title || DOTS}</T>
+      {note && <T style={styles.approvedNote}>{note}</T>}
     </View>
   );
 }

@@ -14,8 +14,6 @@ const values = {
   recipient: "ผู้จัดการฝ่ายบัญชี - ผู้จัดการฝ่ายการเงิน",
   purpose: "โปรดพิจารณา",
   requesterTitle: "เจ้าหน้าที่รัฐกิจสัมพันธ์",
-  approverName: "นายทดสอบ อนุมัติ",
-  approverTitle: "รักษาการผู้จัดการส่วนรัฐกิจและหลักทรัพย์",
   formCode: "FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566",
 };
 
@@ -30,23 +28,28 @@ describe("ตั้งค่าใบเบิก", () => {
     expect(await getReportSettings()).toEqual(DEFAULT_MEMO_SETTINGS);
   });
 
-  it.each(["CREATOR", "ACCOUNTING"] as const)("%s แก้ไม่ได้", async (role) => {
+  it.each(["ACCOUNTING", "APPROVER", "ADMIN"] as const)("%s แก้ไม่ได้", async (role) => {
     await loginAs(role);
     expect(await run(() => updateReportSettings({}, form(values)))).toEqual({ redirect: "/" });
     expect(await getReportSettings()).toEqual(DEFAULT_MEMO_SETTINGS);
   });
 
-  it("admin บันทึกได้ ชื่อผู้อนุมัติเว้นว่างได้ แต่ช่องอื่นต้องกรอก", async () => {
-    await loginAs("ADMIN");
+  it("ผู้จัดทำบันทึกได้ (ดูแลข้อความบนใบเบิกเอง)", async () => {
+    await loginAs("CREATOR");
+    expect(await run(() => updateReportSettings({}, form({ ...values, purpose: "เพื่อทราบ" })))).toMatchObject({
+      result: { message: expect.stringContaining("บันทึกแล้ว") },
+    });
+    expect((await getReportSettings()).purpose).toBe("เพื่อทราบ");
+  });
+
+  it("ทุกช่องต้องกรอก", async () => {
+    await loginAs("CREATOR");
     const missing = await run(() => updateReportSettings({}, form({ ...values, department: " " })));
     expect(missing).toMatchObject({ result: { fieldErrors: { department: ["กรอกชื่อฝ่าย (จาก)"] } } });
 
-    expect(await run(() => updateReportSettings({}, form({ ...values, approverName: "" })))).toMatchObject({
+    expect(await run(() => updateReportSettings({}, form(values)))).toMatchObject({
       result: { message: expect.stringContaining("บันทึกแล้ว") },
     });
-    expect((await getReportSettings()).approverName).toBe("");
-
-    await run(() => updateReportSettings({}, form(values)));
     expect(await getReportSettings()).toEqual(values);
   });
 

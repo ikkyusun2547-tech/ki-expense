@@ -1,9 +1,11 @@
-import { CalendarClock, CircleCheck, Clock, Inbox, LayoutDashboard, Plus, TriangleAlert } from "lucide-react";
+import { CalendarClock, CircleCheck, Clock, FileText, Inbox, LayoutDashboard, Plus, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import {
+  Alert,
   Badge,
+  ButtonLink,
   EmptyRow,
   NameCell,
   PageHeader,
@@ -20,11 +22,12 @@ import { DUE_SOON_DAYS, type CenterSummaryState } from "@/lib/rules/centerSummar
 import { canCreateRequest } from "@/lib/status";
 import { formatThaiDate, todayISO } from "@/lib/thai/date";
 import { requireUser } from "@/server/auth";
+import { db } from "@/server/db";
 import { getCenterSummaries } from "@/server/services/summary";
 
 const STATE: Record<CenterSummaryState, { label: string; short: string; tone: BadgeTone; icon: IconType }> = {
   OVERDUE: { label: "เลยกำหนด ยังไม่เบิก", short: "เลยกำหนด ยังไม่เบิก", tone: "red", icon: TriangleAlert },
-  DUE_SOON: { label: "ใกล้ครบกำหนด ยังไม่เบิก", short: `ใกล้ครบกำหนด (≤ ${DUE_SOON_DAYS} วัน)`, tone: "amber", icon: CalendarClock },
+  DUE_SOON: { label: "ใกล้ครบกำหนด ยังไม่เบิก", short: "ใกล้ครบกำหนด", tone: "amber", icon: CalendarClock },
   NOT_YET: { label: "ยังไม่ถึงรอบ", short: "ยังไม่ถึงรอบ", tone: "zinc", icon: Clock },
   REQUESTED: { label: "เบิกแล้ว", short: "เบิกแล้ว", tone: "green", icon: CircleCheck },
 };
@@ -39,6 +42,14 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
   const filter = STATES.find((s) => s === params.state);
 
   const rows = await getCenterSummaries(today);
+  const isCreator = canCreateRequest(user.role);
+
+  // ผู้จัดทำ: เพิ่งส่งขออนุมัติจากฟอร์ม (กลับมาทำศูนย์ถัดไป) + ใบที่ยังไม่ส่ง/ถูกตีกลับ
+  const sent =
+    isCreator && typeof params.sent === "string"
+      ? await db.request.findUnique({ where: { id: params.sent }, select: { id: true, approverName: true, center: { select: { name: true } } } })
+      : null;
+  const drafts = isCreator ? await db.request.count({ where: { status: "CREATED", deletedAt: null } }) : 0;
   const shown = filter ? rows.filter((r) => r.state === filter) : rows;
   const countOf = (s: CenterSummaryState) => rows.filter((r) => r.state === s).length;
 
@@ -50,13 +61,34 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
         description={`สถานะการเบิกของศูนย์ที่ใช้งานอยู่ ${rows.length} ศูนย์ ณ วันที่ ${formatThaiDate(today, "long")}`}
       />
 
+      {(sent || drafts > 0) && (
+        <div className="mb-6 flex flex-col gap-3">
+          {sent && (
+            <Alert tone="success">
+              ส่งใบเบิก <span className="font-semibold">{sent.center.name}</span> ให้ {sent.approverName} อนุมัติแล้ว — ทำศูนย์ถัดไปได้เลย ·{" "}
+              <Link href={`/requests/${sent.id}`} className="font-medium underline">
+                ดู/พิมพ์ใบเบิก
+              </Link>
+            </Alert>
+          )}
+          {drafts > 0 && (
+            <Alert tone="warning">
+              มีใบเบิกที่ยังไม่ส่งขออนุมัติ <span className="font-semibold">{drafts} ใบ</span> (รวมใบที่ผู้อนุมัติส่งกลับให้แก้) ·{" "}
+              <Link href="/requests?status=CREATED" className="font-medium underline">
+                ดูรายการ
+              </Link>
+            </Alert>
+          )}
+        </div>
+      )}
+
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {STATES.map((s) => (
           <StatCard
             key={s}
             label={STATE[s].short}
             value={countOf(s)}
-            sub="ศูนย์ · กดเพื่อกรอง"
+            sub={s === "DUE_SOON" ? `ภายใน ${DUE_SOON_DAYS} วัน` : "ศูนย์"}
             icon={STATE[s].icon}
             tone={STATE[s].tone}
             href={filter === s ? "/summary" : `/summary?state=${s}`}
@@ -82,7 +114,8 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
               <th className={`${thClass} text-center`}>ครบกำหนดทุกวันที่</th>
               <th className={thClass}>รอบที่ติดตาม</th>
               <th className={thClass}>สถานะการเบิก</th>
-              <th className={thClass}>ใบเบิก</th>
+              <th className={thClass}>สถานะใบเบิก</th>
+              <th className={thClass} />
             </tr>
           </thead>
           <tbody>
@@ -102,25 +135,31 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
                   <Badge tone={STATE[r.state].tone}>{STATE[r.state].label}</Badge>
                 </td>
                 <td className={tdClass}>
+                  {r.request ? <RequestStatusBadge status={r.request.status} /> : <span className="text-slate-300">–</span>}
+                </td>
+                {/* ปุ่มขนาด/ความกว้างเท่ากันทุกแถว ชิดขวา */}
+                <td className={`${tdClass} text-right`}>
                   {r.request ? (
-                    <Link href={`/requests/${r.request.id}`} className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 hover:underline">
-                      <RequestStatusBadge status={r.request.status} /> ดูใบเบิก
-                    </Link>
-                  ) : canCreateRequest(user.role) ? (
-                    <Link
-                      href={`/requests/new?code=${encodeURIComponent(r.center.customerCode)}`}
-                      className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
-                    >
-                      <Plus className="size-3.5" aria-hidden /> สร้างใบเบิก
-                    </Link>
+                    <ButtonLink href={`/requests/${r.request.id}`} variant="secondary" size="sm" icon={FileText} className="w-32">
+                      ดูใบเบิก
+                    </ButtonLink>
                   ) : (
-                    <span className="text-slate-300">–</span>
+                    isCreator && (
+                      <ButtonLink
+                        href={`/requests/new?code=${encodeURIComponent(r.center.customerCode)}`}
+                        size="sm"
+                        icon={Plus}
+                        className="w-32"
+                      >
+                        สร้างใบเบิก
+                      </ButtonLink>
+                    )
                   )}
                 </td>
               </tr>
             ))}
             {shown.length === 0 && (
-              <EmptyRow colSpan={5} icon={Inbox}>
+              <EmptyRow colSpan={6} icon={Inbox}>
                 {filter ? "ไม่มีศูนย์ในสถานะนี้" : "ยังไม่มีศูนย์ที่ใช้งานอยู่ในทะเบียน"}
               </EmptyRow>
             )}

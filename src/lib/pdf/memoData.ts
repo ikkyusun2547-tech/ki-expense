@@ -1,6 +1,6 @@
 import { formatAmount, type AmountInput } from "@/lib/money";
 import { bahtText } from "@/lib/thai/bahtText";
-import { beYear, formatBEDate, formatThaiDate, thaiMonthName, type ISODate } from "@/lib/thai/date";
+import { beYear, formatBEDate, formatThaiDate, formatThaiDateTime, thaiMonthName, type ISODate } from "@/lib/thai/date";
 
 // ข้อมูลบนใบเบิกแบบ "บันทึกภายใน" (FM-50000-02) — แยกจากหน้าตา PDF เพื่อทดสอบข้อความได้ตรง ๆ
 // วันที่ทุกจุดเป็น พ.ศ. ตามฟอร์มจริง
@@ -11,9 +11,7 @@ export type MemoSettings = {
   department: string;
   recipient: string;
   purpose: string;
-  requesterTitle: string;
-  approverName: string;
-  approverTitle: string;
+  requesterTitle: string; // ตำแหน่งผู้ขออนุมัติ เมื่อบัญชีผู้จัดทำยังไม่มีตำแหน่ง
   formCode: string;
 };
 
@@ -23,10 +21,45 @@ export const DEFAULT_MEMO_SETTINGS: MemoSettings = {
   recipient: "ผู้จัดการฝ่ายบัญชี - ผู้จัดการฝ่ายการเงิน",
   purpose: "โปรดพิจารณา",
   requesterTitle: "เจ้าหน้าที่บริหารงาน GPS",
-  approverName: "",
-  approverTitle: "ผู้จัดการส่วนสำนักงานจัดหาวัตถุดิบ",
   formCode: "FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566",
 };
+
+export type SignerText = { name: string; title: string };
+
+// ผู้ลงนามที่เลือกไว้กับใบเบิก (สำเนาชื่อ/ตำแหน่งของบัญชีผู้ใช้ ณ ตอนเลือก) — null = ค่าเริ่มต้น
+export type ChosenSigners = { requester: SignerText | null; approver: SignerText | null };
+
+export type ResolvedSigner = SignerText & { isDefault: boolean };
+
+// ผู้จัดทำที่สร้างใบ: ตำแหน่งจากบัญชีผู้ใช้ ถ้ายังไม่ได้ใส่ใช้ตำแหน่งจากค่าตั้ง
+export type Creator = { name: string; title: string | null };
+
+// ค่าเริ่มต้น: ผู้ขออนุมัติ = ผู้จัดทำ, ผู้อนุมัติ = ยังไม่เลือก (ชื่อ/ตำแหน่งว่าง = เว้นให้เขียนมือ)
+export function resolveSigners(
+  chosen: ChosenSigners | undefined,
+  creator: Creator,
+  settings: MemoSettings,
+): { requester: ResolvedSigner; approver: ResolvedSigner } {
+  return {
+    requester: chosen?.requester
+      ? { ...chosen.requester, isDefault: false }
+      : { name: creator.name, title: creator.title || settings.requesterTitle, isDefault: true },
+    approver: chosen?.approver ? { ...chosen.approver, isDefault: false } : { name: "", title: "", isDefault: true },
+  };
+}
+
+// คอลัมน์สำเนาผู้ลงนามในตาราง Request → ChosenSigners
+export function chosenSignersOf(row: {
+  requesterName: string | null;
+  requesterTitle: string | null;
+  approverName: string | null;
+  approverTitle: string | null;
+}): ChosenSigners {
+  return {
+    requester: row.requesterName !== null ? { name: row.requesterName, title: row.requesterTitle ?? "" } : null,
+    approver: row.approverName !== null ? { name: row.approverName, title: row.approverTitle ?? "" } : null,
+  };
+}
 
 export type MemoInput = {
   memoDate: ISODate; // วันที่ของบันทึก (วันที่สร้างใบเบิก ตามเวลาไทย)
@@ -34,7 +67,9 @@ export type MemoInput = {
   serviceUser: string; // ผู้ใช้บริการ = ชื่อศูนย์
   amount: AmountInput;
   dueDate: ISODate;
-  requesterName: string; // ชื่อผู้จัดทำ
+  creator: Creator; // ผู้จัดทำ (ผู้ขออนุมัติค่าเริ่มต้น)
+  signers?: ChosenSigners; // ผู้ลงนามที่เลือกไว้กับใบเบิก
+  approvedAt?: Date | null; // อนุมัติในระบบแล้ว → พิมพ์เวลาอนุมัติใต้ชื่อผู้อนุมัติ
   settings: MemoSettings;
 };
 
@@ -58,6 +93,7 @@ export type MemoData = {
   closing: string;
   requester: { name: string; title: string };
   approver: { name: string; title: string };
+  approvedNote: string | null; // "อนุมัติในระบบ 24 ต.ค. 2569 10:30 น."
   formCode: string;
 };
 
@@ -65,6 +101,7 @@ export function buildMemo(input: MemoInput): MemoData {
   const { settings: s } = input;
   const amount = formatAmount(input.amount);
   const lines = 1; // v1: 1 ใบเบิก = 1 ศูนย์ = 1 เลขหมาย
+  const { requester, approver } = resolveSigners(input.signers, input.creator, s);
 
   return {
     company: COMPANY_NAME,
@@ -83,8 +120,9 @@ export function buildMemo(input: MemoInput): MemoData {
     bodyBold: `เดือน ${thaiMonthName(input.dueDate)} ${beYear(input.dueDate)} เป็นจำนวนเงินทั้งสิ้น ${amount} บาท (${bahtText(input.amount)})`,
     bodyTail: " ตามเอกสารที่แนบท้ายนี้",
     closing: "จึงเรียนมาเพื่อโปรดพิจารณา",
-    requester: { name: input.requesterName, title: s.requesterTitle },
-    approver: { name: s.approverName, title: s.approverTitle },
+    requester: { name: requester.name, title: requester.title },
+    approver: { name: approver.name, title: approver.title },
+    approvedNote: input.approvedAt ? `อนุมัติในระบบ ${formatThaiDateTime(input.approvedAt)} น.` : null,
     formCode: s.formCode,
   };
 }

@@ -5,10 +5,10 @@ import { fieldErrorsOf, formValues, reportSettingsSchema } from "@/lib/validatio
 import { requireRole } from "@/server/auth";
 import { saveReportSettings } from "@/server/services/reportSettings";
 
-const FIELDS = ["department", "recipient", "purpose", "requesterTitle", "approverName", "approverTitle", "formCode"] as const;
+const FIELDS = ["department", "recipient", "purpose", "requesterTitle", "formCode"] as const;
 
 export async function updateReportSettings(_prev: FormState, formData: FormData): Promise<FormState> {
-  await requireRole("ADMIN");
+  await requireRole("CREATOR");
 
   const values = formValues(formData, FIELDS);
   const parsed = reportSettingsSchema.safeParse(values);

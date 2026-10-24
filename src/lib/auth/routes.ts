@@ -7,24 +7,29 @@ export const SESSION_COOKIE = "ie_session";
 export const PUBLIC_PATHS = ["/login"];
 
 export const HOME_PATH: Record<Role, string> = {
-  CREATOR: "/requests",
+  CREATOR: "/summary", // ผู้จัดทำเริ่มจากงานที่ต้องทำ: ศูนย์ที่ยังไม่เบิก
   ACCOUNTING: "/accounting",
+  APPROVER: "/approvals",
   ADMIN: "/admin/centers",
 };
 
-export type NavItem = { href: string; label: string };
+// group "admin" = เมนูจัดการระบบ แสดงแยกกลุ่มท้ายแถบเมนู
+export type NavItem = { href: string; label: string; group?: "admin" };
 
 const SUMMARY: NavItem = { href: "/summary", label: "สรุปรายศูนย์" };
+const APPROVALS: NavItem = { href: "/approvals", label: "รออนุมัติ" };
+const SETTINGS: NavItem = { href: "/settings", label: "ตั้งค่าใบเบิก" };
 
 export const NAV_ITEMS: Record<Role, NavItem[]> = {
-  CREATOR: [{ href: "/requests", label: "ใบเบิก" }, SUMMARY],
+  CREATOR: [SUMMARY, { href: "/requests", label: "ใบเบิก" }, SETTINGS],
   ACCOUNTING: [{ href: "/accounting", label: "ฝ่ายบัญชี" }, SUMMARY],
+  APPROVER: [APPROVALS, SUMMARY],
   ADMIN: [
     { href: "/requests", label: "ใบเบิก" },
+    APPROVALS,
     { href: "/accounting", label: "ฝ่ายบัญชี" },
     SUMMARY,
-    { href: "/admin/centers", label: "ทะเบียนศูนย์" },
-    { href: "/admin/users", label: "ผู้ใช้" },
-    { href: "/admin/settings", label: "ตั้งค่า" },
+    { href: "/admin/centers", label: "ทะเบียนศูนย์", group: "admin" },
+    { href: "/admin/users", label: "ผู้ใช้", group: "admin" },
   ],
 };

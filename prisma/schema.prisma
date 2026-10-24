@@ -14,6 +14,7 @@ datasource db {
 enum Role {
   CREATOR // ผู้จัดทำ
   ACCOUNTING // ฝ่ายบัญชี
+  APPROVER // ผู้อนุมัติ — กดอนุมัติใบเบิกที่เลือกตนเป็นผู้อนุมัติ
   ADMIN
 }
 
@@ -25,7 +26,8 @@ enum CenterStatus {
 
 enum RequestStatus {
   CREATED // สร้างแล้ว
-  SENT // ส่งบัญชีแล้ว
+  PENDING // รออนุมัติ
+  APPROVED // อนุมัติแล้ว (เข้าคิวฝ่ายบัญชี) — เดิมชื่อ SENT "ส่งบัญชีแล้ว"
   PAID // จ่ายแล้ว
 }
 
@@ -33,7 +35,10 @@ enum LogAction {
   CREATE
   EDIT
   DELETE
-  SEND
+  SEND // เลิกใช้ (ก่อนมีการอนุมัติในระบบ) — คงไว้เพราะ log เก่าลบไม่ได้
+  SUBMIT // ส่งขออนุมัติ
+  APPROVE
+  REJECT // ไม่อนุมัติ → กลับเป็นสร้างแล้ว
   PAY
   REVERT
 }
@@ -43,6 +48,7 @@ model User {
   id                 String   @id @default(cuid())
   username           String   @unique // เก็บเป็นตัวพิมพ์เล็ก
   name               String
+  title              String? // ตำแหน่ง — พิมพ์ใต้ชื่อในใบเบิก (บังคับสำหรับผู้จัดทำ/ผู้อนุมัติ)
   email              String? // ไว้ส่งแจ้งเตือน (ถ้ามี)
   passwordHash       String // scrypt — ดู src/server/password.ts
   mustChangePassword Boolean  @default(true) // บังคับเปลี่ยนรหัสหลังล็อกอินครั้งแรก/admin รีเซ็ต
@@ -51,9 +57,11 @@ model User {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  requests Request[]
-  logs     ApprovalLog[]
-  sessions Session[]
+  requests          Request[]     @relation("RequestCreatedBy")
+  requesterRequests Request[]     @relation("RequestRequester")
+  approverRequests  Request[]     @relation("RequestApprover")
+  logs              ApprovalLog[]
+  sessions          Session[]
 }
 
 // session ล็อกอิน — cookie เก็บ token, DB เก็บแค่ sha256 ของ token
@@ -107,17 +115,30 @@ model Request {
   paymentRef      String?
   invoiceFileKey  String?
   invoiceFileName String?
+  // ผู้ลงนามของใบนี้ = บัญชีผู้ใช้ (ผู้ขอ: ผู้จัดทำ, ผู้อนุมัติ: บทบาท APPROVER)
+  // + สำเนาชื่อ/ตำแหน่ง ณ ตอนเลือก ให้พิมพ์ซ้ำได้เหมือนเดิมแม้ภายหลังแก้ชื่อ/ตำแหน่งของผู้ใช้
+  // requesterId null = ผู้จัดทำที่สร้างใบ (ตำแหน่งจากผู้ใช้ หรือค่าตั้ง); approverId null = ยังไม่เลือก (ส่งขออนุมัติไม่ได้)
+  requesterId     String?
+  requesterName   String?
+  requesterTitle  String?
+  approverId      String?
+  approverName    String?
+  approverTitle   String?
+  approvedAt      DateTime? // เวลาที่ผู้อนุมัติกดอนุมัติ — พิมพ์ในใบเบิก
   createdById     String
   deletedAt       DateTime? // soft delete: ลบได้เฉพาะสถานะ CREATED
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   center    Center        @relation(fields: [centerId], references: [id], onDelete: Restrict)
-  createdBy User          @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  createdBy User          @relation("RequestCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  requester User?         @relation("RequestRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  approver  User?         @relation("RequestApprover", fields: [approverId], references: [id], onDelete: Restrict)
   logs      ApprovalLog[]
 
   @@index([centerId, periodStart])
   @@index([status, dueDate])
+  @@index([approverId, status])
 }
 
 // ข้อความบนใบเบิก (บันทึกภายใน FM-50000-02) ที่ admin แก้ได้ — มีแถวเดียว (id = 1)
@@ -127,9 +148,7 @@ model ReportSetting {
   department     String // จาก (ฝ่าย)
   recipient      String // เรียน
   purpose        String // เพื่อ
-  requesterTitle String // ตำแหน่งผู้ขออนุมัติ (ชื่อ = ผู้จัดทำที่สร้างใบเบิก)
-  approverName   String // ชื่อผู้อนุมัติ (ว่าง = เว้นให้เขียนมือ)
-  approverTitle  String
+  requesterTitle String // ตำแหน่งผู้ขออนุมัติ เมื่อผู้ใช้ยังไม่ได้ใส่ตำแหน่งในบัญชี
   formCode       String // ท้ายกระดาษ เช่น FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566
   updatedAt      DateTime @updatedAt
 }

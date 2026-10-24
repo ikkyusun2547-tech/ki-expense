@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // ปุ่ม N ของ Next (เฉพาะตอนพัฒนา) ย้ายไปขวาล่าง ไม่ให้บังปุ่มออกจากระบบในแถบเมนูซ้าย
+  devIndicators: { position: "bottom-right" },
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {

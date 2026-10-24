@@ -24,7 +24,9 @@ export default async function EditUserPage({ params }: PageProps<"/admin/users/[
             isSelf={isSelf}
             user={{
               id: user.id,
+              username: user.username,
               name: user.name,
+              title: user.title ?? "",
               email: user.email ?? "",
               role: user.role,
               active: String(user.active),
@@ -33,7 +35,7 @@ export default async function EditUserPage({ params }: PageProps<"/admin/users/[
         </Card>
         {!isSelf && (
           <Card>
-            <CardTitle icon={KeyRound}>รีเซ็ตรหัสผ่าน</CardTitle>
+            <CardTitle icon={KeyRound}>ตั้งรหัสผ่านใหม่</CardTitle>
             <ResetPasswordForm id={user.id} username={user.username} />
           </Card>
         )}

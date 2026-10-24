@@ -8,8 +8,8 @@ const ID = 1;
 export async function getReportSettings(): Promise<MemoSettings> {
   const row = await db.reportSetting.findUnique({ where: { id: ID } });
   if (!row) return DEFAULT_MEMO_SETTINGS;
-  const { department, recipient, purpose, requesterTitle, approverName, approverTitle, formCode } = row;
-  return { department, recipient, purpose, requesterTitle, approverName, approverTitle, formCode };
+  const { department, recipient, purpose, requesterTitle, formCode } = row;
+  return { department, recipient, purpose, requesterTitle, formCode };
 }
 
 export async function saveReportSettings(settings: MemoSettings): Promise<void> {

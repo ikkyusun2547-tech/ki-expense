@@ -5,6 +5,7 @@ import { canPerform } from "@/lib/status";
 import { toISODate } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
+import { approverOptions } from "@/server/services/approvers";
 import { RequestForm } from "../../RequestForm";
 
 export default async function EditRequestPage({ params }: PageProps<"/requests/[id]/edit">) {
@@ -16,6 +17,9 @@ export default async function EditRequestPage({ params }: PageProps<"/requests/[
   if (!canPerform(user.role, "EDIT", request.status)) redirect(`/requests/${id}`);
 
   const { center } = request;
+  const approvers = await approverOptions(
+    request.approverId ? { id: request.approverId, name: request.approverName ?? "", title: request.approverTitle ?? "" } : null,
+  );
 
   return (
     <>
@@ -29,6 +33,8 @@ export default async function EditRequestPage({ params }: PageProps<"/requests/[
           mode="edit"
           id={request.id}
           existingFileName={request.invoiceFileName}
+          approvers={approvers}
+          approverId={request.approverId ?? ""}
           center={{
             id: center.id,
             customerCode: center.customerCode,

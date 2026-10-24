@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseAmount } from "@/lib/money";
+import { isSignerRole } from "@/lib/status";
 
 // ตรวจข้อมูลจากฟอร์ม — ใช้ในฝั่งเซิร์ฟเวอร์ (Server Actions) เสมอ ห้ามเชื่อค่าจากเบราว์เซอร์
 
@@ -54,7 +55,24 @@ const username = z
   .toLowerCase()
   .regex(/^[a-z0-9._-]{3,32}$/, { error: "ชื่อผู้ใช้ 3-32 ตัว ใช้ได้เฉพาะ a-z 0-9 . _ -" });
 
-const role = z.enum(["CREATOR", "ACCOUNTING", "ADMIN"], { error: "เลือกบทบาท" });
+const role = z.enum(["CREATOR", "ACCOUNTING", "APPROVER", "ADMIN"], { error: "เลือกบทบาท" });
+
+// ผู้จัดทำ/ผู้อนุมัติต้องมีตำแหน่ง เพราะพิมพ์ใต้ชื่อในใบเบิก
+function requireTitleForSigner(v: { role: z.infer<typeof role>; title: string | null }, ctx: z.RefinementCtx) {
+  if (isSignerRole(v.role) && !v.title) {
+    ctx.addIssue({ code: "custom", path: ["title"], message: "กรอกตำแหน่ง (พิมพ์ใต้ชื่อในใบเบิก)" });
+  }
+}
+
+const password = z
+  .string()
+  .min(MIN_PASSWORD_LENGTH, { error: `รหัสผ่านต้องยาวอย่างน้อย ${MIN_PASSWORD_LENGTH} ตัวอักษร` })
+  .max(128, { error: "รหัสผ่านยาวเกินไป" });
+
+// admin ตั้งรหัสผ่านให้ (สร้างบัญชี/รีเซ็ต) — ผู้ใช้ต้องเปลี่ยนเองตอนล็อกอินครั้งถัดไป
+export const setPasswordSchema = z
+  .object({ password, confirmPassword: z.string() })
+  .refine((v) => v.password === v.confirmPassword, { path: ["confirmPassword"], error: "รหัสผ่านทั้งสองช่องไม่ตรงกัน" });
 
 const email = z
   .string()
@@ -63,19 +81,29 @@ const email = z
   .transform((s) => (s === "" ? null : s))
   .pipe(z.email({ error: "อีเมลไม่ถูกต้อง" }).nullable());
 
-export const userCreateSchema = z.object({
-  username,
-  name: requiredText("ชื่อ-นามสกุล", 100),
-  email,
-  role,
-});
+export const userCreateSchema = z
+  .object({
+    username,
+    name: requiredText("ชื่อ-นามสกุล", 100),
+    title: optionalText(100),
+    email,
+    role,
+    password,
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.password === v.confirmPassword, { path: ["confirmPassword"], error: "รหัสผ่านทั้งสองช่องไม่ตรงกัน" })
+  .superRefine(requireTitleForSigner);
 
-export const userUpdateSchema = z.object({
-  name: requiredText("ชื่อ-นามสกุล", 100),
-  email,
-  role,
-  active: z.enum(["true", "false"]).transform((v) => v === "true"),
-});
+export const userUpdateSchema = z
+  .object({
+    username,
+    name: requiredText("ชื่อ-นามสกุล", 100),
+    title: optionalText(100),
+    email,
+    role,
+    active: z.enum(["true", "false"]).transform((v) => v === "true"),
+  })
+  .superRefine(requireTitleForSigner);
 
 export const changePasswordSchema = z
   .object({
@@ -102,8 +130,6 @@ export const reportSettingsSchema = z.object({
   recipient: requiredText("เรียน", 150),
   purpose: requiredText("เพื่อ", 100),
   requesterTitle: requiredText("ตำแหน่งผู้ขออนุมัติ", 100),
-  approverName: z.string().trim().max(100, { error: "ยาวเกิน 100 ตัวอักษร" }), // ว่างได้ = เว้นให้เขียนมือ
-  approverTitle: requiredText("ตำแหน่งผู้อนุมัติ", 100),
   formCode: requiredText("รหัสฟอร์ม", 100),
 });
 

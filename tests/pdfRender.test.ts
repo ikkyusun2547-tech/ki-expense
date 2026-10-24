@@ -14,8 +14,11 @@ describe("renderInternalMemo", () => {
       serviceUser: "ห้องรับรองคุณมั่นคง",
       amount: "749",
       dueDate: "2026-11-12",
-      requesterName: "นางสาวทดสอบ จัดทำ",
-      settings: { ...DEFAULT_MEMO_SETTINGS, approverName: "นายทดสอบ อนุมัติ" },
+      creator: { name: "นางสาวทดสอบ จัดทำ", title: "เจ้าหน้าที่ธุรการ" },
+      // ผู้อนุมัติ = บัญชีผู้ใช้ที่เลือก (ตำแหน่งตามคนนั้น) + เวลาที่อนุมัติในระบบ
+      signers: { requester: null, approver: { name: "นางตัวอย่าง รักษาการ", title: "รักษาการผู้จัดการส่วน" } },
+      approvedAt: new Date("2026-10-24T03:30:00Z"),
+      settings: DEFAULT_MEMO_SETTINGS,
     });
     const pdf = await renderInternalMemo(data);
     if (process.env.PDF_SAMPLE) writeFileSync(process.env.PDF_SAMPLE, pdf);

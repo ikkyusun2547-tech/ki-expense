@@ -1,8 +1,9 @@
 import "server-only";
+import type { Role } from "@/generated/prisma/enums";
 import { toAmountString } from "@/lib/money";
 import { checkPayment, type PaymentInput } from "@/lib/rules/paymentRules";
 import { checkRequest, type Issue, type RequestDraft } from "@/lib/rules/requestRules";
-import { checkTransition, type RequestAction } from "@/lib/status";
+import { checkSignerChange, checkTransition, isAssignedApprover, type RequestAction } from "@/lib/status";
 import { formatThaiDate, fromISODate, toISODate, type ISODate } from "@/lib/thai/date";
 import type { CurrentUser } from "@/server/auth";
 import { db } from "@/server/db";
@@ -80,13 +81,29 @@ async function storeFile(file: File | null): Promise<{ ok: true; saved: SavedFil
   return result.ok ? { ok: true, saved: result.file } : result;
 }
 
+// ผู้อนุมัติที่เลือกในฟอร์มใบเบิก: undefined = ไม่เปลี่ยน, null = ไม่เลือก, id = ต้องเป็นผู้อนุมัติที่ใช้งานอยู่
+type ApproverFields = { approverId: string | null; approverName: string | null; approverTitle: string | null };
+
+async function approverFields(approverId: string | null): Promise<ApproverFields | null> {
+  if (!approverId) return { approverId: null, approverName: null, approverTitle: null };
+  const user = await db.user.findUnique({ where: { id: approverId } });
+  if (!user || !user.active || user.role !== "APPROVER") return null;
+  return { approverId: user.id, approverName: user.name, approverTitle: user.title ?? "" };
+}
+
+const APPROVER_NOT_FOUND = "ไม่พบผู้อนุมัติที่เลือก (อาจถูกปิดบัญชี) กรุณาเลือกใหม่";
+
 export async function createRequest(args: {
   centerId: string;
   input: RequestInput;
   file: File | null;
   confirmWarnings: boolean;
+  approverId?: string | null;
   actor: CurrentUser;
 }): Promise<SaveOutcome> {
+  const approver = await approverFields(args.approverId ?? null);
+  if (!approver) return { ok: false, blocks: [], warnings: [], error: APPROVER_NOT_FOUND };
+
   const check = await validate({ ...args, hasExistingFile: false });
   if (!check.ok) return check;
 
@@ -101,6 +118,7 @@ export async function createRequest(args: {
           ...toDbFields(args.input),
           invoiceFileKey: stored.saved?.key,
           invoiceFileName: stored.saved?.fileName,
+          ...approver,
           createdById: args.actor.id,
         },
       });
@@ -122,6 +140,7 @@ export async function updateRequest(args: {
   input: RequestInput;
   file: File | null;
   confirmWarnings: boolean;
+  approverId?: string | null;
   actor: CurrentUser;
 }): Promise<SaveOutcome> {
   const current = await db.request.findUnique({ where: { id: args.requestId } });
@@ -129,6 +148,11 @@ export async function updateRequest(args: {
 
   const allowed = checkTransition(args.actor.role, "EDIT", current.status);
   if (!allowed.ok) return { ok: false, blocks: [], warnings: [], error: allowed.reason };
+
+  // เลือกผู้อนุมัติคนเดิม (แม้ถูกปิดบัญชีไปแล้ว) = ไม่เปลี่ยน
+  const approverChanged = args.approverId !== undefined && args.approverId !== current.approverId;
+  const approver = approverChanged ? await approverFields(args.approverId ?? null) : undefined;
+  if (approver === null) return { ok: false, blocks: [], warnings: [], error: APPROVER_NOT_FOUND };
 
   const check = await validate({
     centerId: current.centerId,
@@ -145,15 +169,20 @@ export async function updateRequest(args: {
 
   try {
     await db.$transaction(async (tx) => {
-      // where มี status ด้วย: ถ้ามีคนส่งบัญชีไปแล้วระหว่างนี้ จะไม่แก้ทับ
+      // where มี status ด้วย: ถ้ามีคนส่งขออนุมัติไปแล้วระหว่างนี้ จะไม่แก้ทับ
       const updated = await tx.request.updateMany({
         where: { id: current.id, status: "CREATED", deletedAt: null },
         data: {
           ...toDbFields(args.input),
           ...(stored.saved && { invoiceFileKey: stored.saved.key, invoiceFileName: stored.saved.fileName }),
+          ...approver,
         },
       });
       if (updated.count === 0) throw new StaleRequestError();
+      const notes = [
+        stored.saved && "เปลี่ยนไฟล์ใบแจ้งหนี้",
+        approver && `ผู้อนุมัติ: ${approver.approverName ? `${approver.approverName} (${approver.approverTitle})` : "ยังไม่เลือก"}`,
+      ].filter(Boolean);
       await tx.approvalLog.create({
         data: {
           requestId: current.id,
@@ -161,7 +190,7 @@ export async function updateRequest(args: {
           fromStatus: "CREATED",
           toStatus: "CREATED",
           actorId: args.actor.id,
-          note: stored.saved ? "เปลี่ยนไฟล์ใบแจ้งหนี้" : null,
+          note: notes.length ? notes.join(", ") : null,
         },
       });
     });
@@ -176,28 +205,52 @@ export async function updateRequest(args: {
 
 export type TransitionOutcome = { ok: true } | { ok: false; error: string };
 
-// เปลี่ยนสถานะ: SEND (ส่งบัญชีแล้ว), DELETE (ลบแบบ soft), REVERT (admin ย้อนกลับ ต้องมีเหตุผล)
+export type TransitionAction = Extract<RequestAction, "SUBMIT" | "APPROVE" | "REJECT" | "DELETE" | "REVERT">;
+
+const NOTE_REQUIRED: Partial<Record<TransitionAction, string>> = {
+  REJECT: "กรุณาระบุเหตุผลที่ไม่อนุมัติ",
+  REVERT: "กรุณาระบุเหตุผลที่ย้อนสถานะ",
+};
+
+// เปลี่ยนสถานะ: SUBMIT (ส่งขออนุมัติ), APPROVE/REJECT (ผู้อนุมัติที่เลือกไว้ในใบ), DELETE (ลบแบบ soft), REVERT (admin ย้อนกลับ)
 // PAY แยกเป็น payRequest เพราะต้องรับวันที่จ่าย + เลขอ้างอิง
 export async function transitionRequest(args: {
   requestId: string;
-  action: Extract<RequestAction, "SEND" | "DELETE" | "REVERT">;
+  action: TransitionAction;
   actor: CurrentUser;
   note?: string;
 }): Promise<TransitionOutcome> {
-  const current = await db.request.findUnique({ where: { id: args.requestId } });
+  const current = await db.request.findUnique({ where: { id: args.requestId }, include: { approver: true } });
   if (!current || current.deletedAt) return { ok: false, error: "ไม่พบใบเบิกนี้" };
 
   const allowed = checkTransition(args.actor.role, args.action, current.status);
   if (!allowed.ok) return { ok: false, error: allowed.reason };
 
+  if ((args.action === "APPROVE" || args.action === "REJECT") && !isAssignedApprover(args.actor.id, current)) {
+    return { ok: false, error: "ใบเบิกนี้ไม่ได้ส่งมาให้คุณอนุมัติ" };
+  }
+  if (args.action === "SUBMIT") {
+    if (!current.approver) return { ok: false, error: "เลือกผู้อนุมัติก่อนส่งขออนุมัติ" };
+    if (!current.approver.active || current.approver.role !== "APPROVER") {
+      return { ok: false, error: `${current.approver.name} ไม่ได้เป็นผู้อนุมัติที่ใช้งานอยู่แล้ว กรุณาเลือกผู้อนุมัติใหม่` };
+    }
+  }
+
   const note = args.note?.trim() || null;
-  if (args.action === "REVERT" && !note) return { ok: false, error: "กรุณาระบุเหตุผลที่ย้อนสถานะ" };
+  const noteMessage = NOTE_REQUIRED[args.action];
+  if (noteMessage && !note) return { ok: false, error: noteMessage };
+
+  // อนุมัติ → บันทึกเวลา (พิมพ์ในใบเบิก); กลับเป็นสร้างแล้ว → ล้างเวลาอนุมัติเดิม
+  const data =
+    args.action === "DELETE"
+      ? { deletedAt: new Date() }
+      : { status: allowed.to, approvedAt: args.action === "APPROVE" ? new Date() : allowed.to === "CREATED" ? null : undefined };
 
   try {
     await db.$transaction(async (tx) => {
       const updated = await tx.request.updateMany({
         where: { id: current.id, status: current.status, deletedAt: null },
-        data: args.action === "DELETE" ? { deletedAt: new Date() } : { status: allowed.to },
+        data,
       });
       if (updated.count === 0) throw new StaleRequestError();
       await tx.approvalLog.create({
@@ -220,7 +273,7 @@ export async function transitionRequest(args: {
 
 export type PayOutcome = { ok: true } | { ok: false; error?: string; fieldErrors?: { paidDate?: string; paymentRef?: string } };
 
-// ฝ่ายบัญชีบันทึกการจ่าย: SENT → PAID (ล็อก) — แก้ได้เฉพาะวันที่จ่ายกับเลขอ้างอิง
+// ฝ่ายบัญชีบันทึกการจ่าย: APPROVED → PAID (ล็อก) — แก้ได้เฉพาะวันที่จ่ายกับเลขอ้างอิง
 export async function payRequest(args: {
   requestId: string;
   input: PaymentInput;
@@ -239,7 +292,7 @@ export async function payRequest(args: {
   try {
     await db.$transaction(async (tx) => {
       const updated = await tx.request.updateMany({
-        where: { id: current.id, status: "SENT", deletedAt: null },
+        where: { id: current.id, status: "APPROVED", deletedAt: null },
         data: { status: "PAID", paidDate: fromISODate(payment.paidDate), paymentRef: payment.paymentRef },
       });
       if (updated.count === 0) throw new StaleRequestError();
@@ -247,7 +300,7 @@ export async function payRequest(args: {
         data: {
           requestId: current.id,
           action: "PAY",
-          fromStatus: "SENT",
+          fromStatus: "APPROVED",
           toStatus: "PAID",
           actorId: args.actor.id,
           note: `จ่ายวันที่ ${formatThaiDate(payment.paidDate)} เลขอ้างอิง ${payment.paymentRef}`,
@@ -259,4 +312,87 @@ export async function payRequest(args: {
     throw error;
   }
   return { ok: true };
+}
+
+// ---------- ผู้ลงนามของใบเบิก ----------
+
+type SignerColumns = { id: string | null; name: string | null; title: string | null };
+
+const NO_SIGNER: SignerColumns = { id: null, name: null, title: null };
+
+// ผู้จัดทำ/admin เลือกผู้ขออนุมัติ (ผู้จัดทำคนอื่นได้) และผู้อนุมัติ ของใบที่ยังไม่ส่งขออนุมัติ
+// ค่าจากช่องเลือก = id ของผู้ใช้, "" = ค่าเริ่มต้น (ผู้ขอ = ผู้จัดทำที่สร้างใบ, ผู้อนุมัติ = ยังไม่เลือก)
+// เก็บ id + สำเนาชื่อ/ตำแหน่ง แล้วเขียน log
+export async function setRequestSigners(args: {
+  requestId: string;
+  requester: string;
+  approver: string;
+  actor: CurrentUser;
+}): Promise<TransitionOutcome> {
+  const current = await db.request.findUnique({ where: { id: args.requestId } });
+  if (!current || current.deletedAt) return { ok: false, error: "ไม่พบใบเบิกนี้" };
+
+  const allowed = checkSignerChange(args.actor.role, current.status);
+  if (!allowed.ok) return { ok: false, error: allowed.reason };
+
+  // เลือกคนเดิมซ้ำ = คงสำเนาเดิม (แม้บัญชีนั้นถูกปิดไปแล้ว); เลือกคนใหม่ต้องเป็นบัญชีที่ใช้งานอยู่และบทบาทตรง
+  const pick = async (choice: string, role: Role, kept: SignerColumns): Promise<SignerColumns | null> => {
+    if (choice === "") return NO_SIGNER;
+    if (choice === kept.id) return kept;
+    const user = await db.user.findUnique({ where: { id: choice } });
+    if (!user || !user.active || user.role !== role) return null;
+    return { id: user.id, name: user.name, title: user.title ?? "" };
+  };
+  const requester = await pick(args.requester, "CREATOR", {
+    id: current.requesterId,
+    name: current.requesterName,
+    title: current.requesterTitle,
+  });
+  const approver = await pick(args.approver, "APPROVER", {
+    id: current.approverId,
+    name: current.approverName,
+    title: current.approverTitle,
+  });
+  if (!requester || !approver) return { ok: false, error: "ไม่พบผู้ใช้ที่เลือก (อาจถูกปิดบัญชีหรือเปลี่ยนบทบาท) กรุณาโหลดหน้าใหม่" };
+
+  const changes = [
+    requester.id !== current.requesterId ? `ผู้ขออนุมัติ: ${describeSigner(requester, "ผู้จัดทำ")}` : null,
+    approver.id !== current.approverId ? `ผู้อนุมัติ: ${describeSigner(approver, "ยังไม่เลือก")}` : null,
+  ].filter((c) => c !== null);
+  if (changes.length === 0) return { ok: true };
+
+  try {
+    await db.$transaction(async (tx) => {
+      const updated = await tx.request.updateMany({
+        where: { id: current.id, status: current.status, deletedAt: null },
+        data: {
+          requesterId: requester.id,
+          requesterName: requester.name,
+          requesterTitle: requester.title,
+          approverId: approver.id,
+          approverName: approver.name,
+          approverTitle: approver.title,
+        },
+      });
+      if (updated.count === 0) throw new StaleRequestError();
+      await tx.approvalLog.create({
+        data: {
+          requestId: current.id,
+          action: "EDIT",
+          fromStatus: current.status,
+          toStatus: current.status,
+          actorId: args.actor.id,
+          note: `เปลี่ยนผู้ลงนาม — ${changes.join(", ")}`,
+        },
+      });
+    });
+  } catch (error) {
+    if (error instanceof StaleRequestError) return { ok: false, error: STALE_MESSAGE };
+    throw error;
+  }
+  return { ok: true };
+}
+
+function describeSigner(s: SignerColumns, fallback: string): string {
+  return s.name === null ? fallback : `${s.name} (${s.title})`;
 }

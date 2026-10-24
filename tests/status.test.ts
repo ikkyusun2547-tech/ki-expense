@@ -1,18 +1,30 @@
 import { describe, expect, it } from "vitest";
 import type { RequestStatus, Role } from "@/generated/prisma/enums";
-import { canCreateRequest, canPerform, checkTransition, type RequestAction } from "@/lib/status";
+import {
+  canCreateRequest,
+  canPerform,
+  checkSignerChange,
+  checkTransition,
+  isAssignedApprover,
+  isSignerRole,
+  type RequestAction,
+} from "@/lib/status";
 
-const ROLES: Role[] = ["CREATOR", "ACCOUNTING", "ADMIN"];
-const STATUSES: RequestStatus[] = ["CREATED", "SENT", "PAID"];
-const ACTIONS: RequestAction[] = ["EDIT", "DELETE", "SEND", "PAY", "REVERT"];
+const ROLES: Role[] = ["CREATOR", "ACCOUNTING", "APPROVER", "ADMIN"];
+const STATUSES: RequestStatus[] = ["CREATED", "PENDING", "APPROVED", "PAID"];
+const ACTIONS: RequestAction[] = ["EDIT", "DELETE", "SUBMIT", "APPROVE", "REJECT", "PAY", "REVERT"];
 
 // ตารางสิทธิ์ที่ตกลงกัน: [บทบาท, การกระทำ, สถานะปัจจุบัน] → สถานะใหม่
+// (อนุมัติในระบบ 2026-10-24: อนุมัติแล้วเข้าคิวบัญชีทันที, ผู้อนุมัติไม่อนุมัติ → กลับเป็นสร้างแล้ว)
 const ALLOWED: [Role, RequestAction, RequestStatus, RequestStatus][] = [
   ["CREATOR", "EDIT", "CREATED", "CREATED"],
   ["CREATOR", "DELETE", "CREATED", "CREATED"],
-  ["CREATOR", "SEND", "CREATED", "SENT"],
-  ["ACCOUNTING", "PAY", "SENT", "PAID"],
-  ["ADMIN", "REVERT", "SENT", "CREATED"],
+  ["CREATOR", "SUBMIT", "CREATED", "PENDING"],
+  ["APPROVER", "APPROVE", "PENDING", "APPROVED"],
+  ["APPROVER", "REJECT", "PENDING", "CREATED"],
+  ["ACCOUNTING", "PAY", "APPROVED", "PAID"],
+  ["ADMIN", "REVERT", "PENDING", "CREATED"],
+  ["ADMIN", "REVERT", "APPROVED", "CREATED"],
 ];
 
 describe("checkTransition", () => {
@@ -38,18 +50,57 @@ describe("checkTransition", () => {
   });
 
   it("ผู้จัดทำบันทึกการจ่ายไม่ได้", () => {
-    const result = checkTransition("CREATOR", "PAY", "SENT");
+    const result = checkTransition("CREATOR", "PAY", "APPROVED");
     expect(result).toEqual({ ok: false, reason: "ผู้จัดทำไม่มีสิทธิ์บันทึกการจ่าย" });
   });
 
-  it("ผู้จัดทำแก้ใบที่ส่งบัญชีแล้วไม่ได้", () => {
-    const result = checkTransition("CREATOR", "EDIT", "SENT");
-    expect(result).toEqual({ ok: false, reason: 'ใบเบิกสถานะ "ส่งบัญชีแล้ว" แก้ไขไม่ได้' });
+  it("ผู้จัดทำแก้ใบที่รออนุมัติไม่ได้", () => {
+    const result = checkTransition("CREATOR", "EDIT", "PENDING");
+    expect(result).toEqual({ ok: false, reason: 'ใบเบิกสถานะ "รออนุมัติ" แก้ไขไม่ได้' });
+  });
+
+  it("admin อนุมัติแทนไม่ได้, ฝ่ายบัญชีจ่ายใบที่ยังไม่อนุมัติไม่ได้", () => {
+    expect(canPerform("ADMIN", "APPROVE", "PENDING")).toBe(false);
+    expect(canPerform("ACCOUNTING", "PAY", "PENDING")).toBe(false);
   });
 });
 
 describe("canCreateRequest", () => {
   it("เฉพาะผู้จัดทำ", () => {
     expect(ROLES.filter(canCreateRequest)).toEqual(["CREATOR"]);
+  });
+});
+
+describe("isSignerRole", () => {
+  it("ผู้จัดทำและผู้อนุมัติต้องมีตำแหน่ง", () => {
+    expect(ROLES.filter(isSignerRole)).toEqual(["CREATOR", "APPROVER"]);
+  });
+});
+
+describe("isAssignedApprover", () => {
+  it("เฉพาะผู้อนุมัติที่เลือกไว้ในใบ", () => {
+    expect(isAssignedApprover("u1", { approverId: "u1" })).toBe(true);
+    expect(isAssignedApprover("u2", { approverId: "u1" })).toBe(false);
+    expect(isAssignedApprover("u1", { approverId: null })).toBe(false);
+  });
+});
+
+describe("checkSignerChange", () => {
+  // ผู้จัดทำ + admin เลือกผู้ลงนามได้เฉพาะก่อนส่งขออนุมัติ
+  it.each([
+    ["CREATOR", "CREATED"],
+    ["ADMIN", "CREATED"],
+  ] as const)("%s เปลี่ยนได้เมื่อใบ %s", (role, status) => {
+    expect(checkSignerChange(role, status)).toEqual({ ok: true });
+  });
+
+  it.each([
+    ["CREATOR", "PENDING"],
+    ["CREATOR", "APPROVED"],
+    ["ADMIN", "PAID"],
+    ["ACCOUNTING", "CREATED"],
+    ["APPROVER", "CREATED"],
+  ] as const)("%s เปลี่ยนไม่ได้เมื่อใบ %s", (role, status) => {
+    expect(checkSignerChange(role, status)).toMatchObject({ ok: false, reason: expect.any(String) });
   });
 });

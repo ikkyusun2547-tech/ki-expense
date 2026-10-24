@@ -22,7 +22,7 @@ export default async function AccountingPage({ searchParams }: PageProps<"/accou
   const tab = params.tab === "paid" ? "paid" : "pending";
 
   const pending = await db.request.findMany({
-    where: { status: "SENT", deletedAt: null },
+    where: { status: "APPROVED", deletedAt: null },
     orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
     include: { center: { select: { name: true, customerCode: true } } },
   });
@@ -36,8 +36,8 @@ export default async function AccountingPage({ searchParams }: PageProps<"/accou
         title="ฝ่ายบัญชี"
         description={
           user.role === "ACCOUNTING"
-            ? "ใบเบิกที่ผู้จัดทำส่งมาแล้ว เรียงตามวันครบกำหนดใกล้สุด — บันทึกวันที่จ่ายจริงและเลขอ้างอิงเมื่อจ่ายแล้ว"
-            : "ใบเบิกที่ส่งบัญชีแล้ว (admin ดูได้ แต่บันทึกการจ่ายได้เฉพาะฝ่ายบัญชี)"
+            ? "ใบเบิกที่ผู้อนุมัติอนุมัติแล้ว เรียงตามวันครบกำหนดใกล้สุด — บันทึกวันที่จ่ายจริงและเลขอ้างอิงเมื่อจ่ายแล้ว"
+            : "ใบเบิกที่อนุมัติแล้วรอจ่าย (admin ดูได้ แต่บันทึกการจ่ายได้เฉพาะฝ่ายบัญชี)"
         }
       />
 

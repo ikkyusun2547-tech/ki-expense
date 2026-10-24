@@ -3,10 +3,12 @@
 import { redirect } from "next/navigation";
 import type { CenterStatus } from "@/generated/prisma/enums";
 import type { FormState } from "@/lib/formState";
+import { suggestRequest, type RequestSuggestion } from "@/lib/rules/requestDefaults";
 import type { Issue } from "@/lib/rules/requestRules";
+import { toISODate, todayISO } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
-import { createRequest, transitionRequest, updateRequest, type RequestInput } from "@/server/services/requests";
+import { createRequest, setRequestSigners, transitionRequest, updateRequest, type RequestInput } from "@/server/services/requests";
 
 export type CenterSummary = {
   id: string;
@@ -18,7 +20,7 @@ export type CenterSummary = {
   status: CenterStatus;
 };
 
-export type CenterLookup = { ok: true; center: CenterSummary } | { ok: false; error: string };
+export type CenterLookup = { ok: true; center: CenterSummary; suggestion: RequestSuggestion } | { ok: false; error: string };
 
 // ผู้จัดทำพิมพ์รหัสลูกค้า → แสดงศูนย์ + ยอดปกติ
 export async function findCenterByCode(code: string): Promise<CenterLookup> {
@@ -30,8 +32,21 @@ export async function findCenterByCode(code: string): Promise<CenterLookup> {
   const center = await db.center.findUnique({ where: { customerCode } });
   if (!center) return { ok: false, error: `ไม่พบรหัสลูกค้า ${customerCode} ในทะเบียนศูนย์` };
 
+  // กรอกให้ล่วงหน้าจากใบล่าสุดของศูนย์นี้ (รอบถัดไป)
+  const last = await db.request.findFirst({
+    where: { centerId: center.id, deletedAt: null },
+    orderBy: { periodEnd: "desc" },
+    select: { periodEnd: true, dueDate: true },
+  });
+  const suggestion = suggestRequest(
+    { normalAmount: center.normalAmount.toFixed(2), dueDay: center.dueDay },
+    last && { periodEnd: toISODate(last.periodEnd), dueDate: toISODate(last.dueDate) },
+    todayISO(),
+  );
+
   return {
     ok: true,
+    suggestion,
     center: {
       id: center.id,
       customerCode: center.customerCode,
@@ -51,6 +66,7 @@ export type RequestFormState = {
 };
 
 // สร้าง (ไม่มี id) หรือแก้ไข (มี id) ใบเบิก; ถ้ามีคำเตือนต้องส่ง confirmWarnings=1 มาอีกรอบ
+// intent=submit → บันทึกแล้วส่งขออนุมัติต่อทันที (ต้องเลือกผู้อนุมัติ) แล้วกลับหน้าสรุปรายศูนย์ไปทำศูนย์ถัดไป
 export async function saveRequest(_prev: RequestFormState, formData: FormData): Promise<RequestFormState> {
   const actor = await requireRole("CREATOR");
 
@@ -66,20 +82,35 @@ export async function saveRequest(_prev: RequestFormState, formData: FormData): 
   const upload = formData.get("invoiceFile");
   const file = upload instanceof File && upload.size > 0 ? upload : null;
   const confirmWarnings = text("confirmWarnings") === "1";
+  // ไม่มีช่องผู้อนุมัติในฟอร์ม = ไม่เปลี่ยน, ช่องว่าง = ไม่เลือก
+  const approverId = formData.has("approverId") ? text("approverId") || null : undefined;
+  const submit = text("intent") === "submit";
+  if (submit && !approverId) return { error: "เลือกผู้อนุมัติก่อนส่งขออนุมัติ" };
 
   const outcome = id
-    ? await updateRequest({ requestId: id, input, file, confirmWarnings, actor })
-    : await createRequest({ centerId: text("centerId"), input, file, confirmWarnings, actor });
+    ? await updateRequest({ requestId: id, input, file, confirmWarnings, approverId, actor })
+    : await createRequest({ centerId: text("centerId"), input, file, confirmWarnings, approverId, actor });
 
   if (!outcome.ok) return { error: outcome.error, blocks: outcome.blocks, warnings: outcome.warnings };
-  redirect(`/requests/${outcome.id}`);
+  if (!submit) redirect(`/requests/${outcome.id}`);
+
+  const sent = await transitionRequest({ requestId: outcome.id, action: "SUBMIT", actor });
+  // บันทึกแล้วแต่ส่งไม่สำเร็จ (เช่น ผู้อนุมัติถูกปิดบัญชีพอดี) → ไปหน้าใบเบิกให้ส่งเอง
+  redirect(sent.ok ? `/summary?sent=${outcome.id}` : `/requests/${outcome.id}`);
 }
 
-const TRANSITIONS = ["SEND", "DELETE", "REVERT"] as const;
+const TRANSITIONS = ["SUBMIT", "APPROVE", "REJECT", "DELETE", "REVERT"] as const;
 
-// ปุ่มเปลี่ยนสถานะในหน้ารายละเอียด — สิทธิ์ละเอียดตรวจซ้ำใน service ตาม state machine
+// หลังทำรายการ: ลบ → รายการใบเบิก, ผู้อนุมัติ → กลับคิวรออนุมัติ, อื่น ๆ → หน้าใบเบิกเดิม
+const REDIRECT_AFTER: Partial<Record<(typeof TRANSITIONS)[number], string>> = {
+  DELETE: "/requests",
+  APPROVE: "/approvals?done=approve",
+  REJECT: "/approvals?done=reject",
+};
+
+// ปุ่มเปลี่ยนสถานะในหน้ารายละเอียด — สิทธิ์ละเอียด (บทบาท/สถานะ/ผู้อนุมัติที่เลือกไว้) ตรวจซ้ำใน service
 export async function changeRequestStatus(_prev: FormState, formData: FormData): Promise<FormState> {
-  const actor = await requireRole("CREATOR", "ADMIN");
+  const actor = await requireRole("CREATOR", "APPROVER", "ADMIN");
 
   const requestId = String(formData.get("id") ?? "");
   const action = TRANSITIONS.find((a) => a === formData.get("action"));
@@ -88,5 +119,21 @@ export async function changeRequestStatus(_prev: FormState, formData: FormData):
   const outcome = await transitionRequest({ requestId, action, actor, note: String(formData.get("note") ?? "") });
   if (!outcome.ok) return { error: outcome.error };
 
-  redirect(action === "DELETE" ? "/requests" : `/requests/${requestId}`);
+  redirect(REDIRECT_AFTER[action] ?? `/requests/${requestId}`);
+}
+
+// เลือกผู้ขออนุมัติ/ผู้อนุมัติที่จะพิมพ์ในใบเบิกนี้ — สิทธิ์ตามสถานะตรวจซ้ำใน service
+export async function changeRequestSigners(_prev: FormState, formData: FormData): Promise<FormState> {
+  const actor = await requireRole("CREATOR", "ADMIN");
+
+  const requestId = String(formData.get("id") ?? "");
+  const outcome = await setRequestSigners({
+    requestId,
+    requester: String(formData.get("requester") ?? ""),
+    approver: String(formData.get("approver") ?? ""),
+    actor,
+  });
+  if (!outcome.ok) return { error: outcome.error };
+
+  redirect(`/requests/${requestId}?signers=1`);
 }
