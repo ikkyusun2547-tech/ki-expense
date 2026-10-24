@@ -7,22 +7,22 @@ import { beYear, formatBEDate, formatThaiDate, formatThaiDateTime, thaiMonthName
 
 export const COMPANY_NAME = "บริษัท น้ำตาลสุรินทร์ จำกัด";
 
-export type MemoSettings = {
-  department: string;
-  recipient: string;
-  purpose: string;
-  requesterTitle: string; // ตำแหน่งผู้ขออนุมัติ เมื่อบัญชีผู้จัดทำยังไม่มีตำแหน่ง
-  formCode: string;
+// ข้อความหัวบันทึกของแต่ละใบ (ผู้จัดทำกรอกในฟอร์ม ค่าเริ่มต้น = ใบล่าสุดของตน)
+export type MemoTexts = {
+  department: string; // จาก (ฝ่าย) — ใช้ในย่อหน้า "... ขอเบิกค่าใช้บริการ" ด้วย
+  recipient: string; // เรียน
+  purpose: string; // เพื่อ
 };
 
-// ค่าเริ่มต้นก่อน admin ตั้งค่า: ฝ่าย/ตำแหน่งตามสเปกเดิม, เรียน/เพื่อ/รหัสฟอร์ม ตามฟอร์มจริง
-export const DEFAULT_MEMO_SETTINGS: MemoSettings = {
+// ใบแรกของผู้จัดทำ: ฝ่ายตามสเปกเดิม, เรียน/เพื่อ ตามฟอร์มจริง (ตรงกับค่าใน migration request_memo_texts)
+export const DEFAULT_MEMO_TEXTS: MemoTexts = {
   department: "ฝ่ายจัดหาวัตถุดิบ",
   recipient: "ผู้จัดการฝ่ายบัญชี - ผู้จัดการฝ่ายการเงิน",
   purpose: "โปรดพิจารณา",
-  requesterTitle: "เจ้าหน้าที่บริหารงาน GPS",
-  formCode: "FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566",
 };
+
+// รหัสฟอร์มท้ายกระดาษ — ฟอร์มออกรุ่นใหม่ให้แก้ที่นี่
+export const FORM_CODE = "FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566";
 
 export type SignerText = { name: string; title: string };
 
@@ -31,19 +31,18 @@ export type ChosenSigners = { requester: SignerText | null; approver: SignerText
 
 export type ResolvedSigner = SignerText & { isDefault: boolean };
 
-// ผู้จัดทำที่สร้างใบ: ตำแหน่งจากบัญชีผู้ใช้ ถ้ายังไม่ได้ใส่ใช้ตำแหน่งจากค่าตั้ง
+// ผู้จัดทำที่สร้างใบ (ตำแหน่งจากบัญชีผู้ใช้ — บังคับใส่สำหรับผู้จัดทำ)
 export type Creator = { name: string; title: string | null };
 
 // ค่าเริ่มต้น: ผู้ขออนุมัติ = ผู้จัดทำ, ผู้อนุมัติ = ยังไม่เลือก (ชื่อ/ตำแหน่งว่าง = เว้นให้เขียนมือ)
 export function resolveSigners(
   chosen: ChosenSigners | undefined,
   creator: Creator,
-  settings: MemoSettings,
 ): { requester: ResolvedSigner; approver: ResolvedSigner } {
   return {
     requester: chosen?.requester
       ? { ...chosen.requester, isDefault: false }
-      : { name: creator.name, title: creator.title || settings.requesterTitle, isDefault: true },
+      : { name: creator.name, title: creator.title ?? "", isDefault: true },
     approver: chosen?.approver ? { ...chosen.approver, isDefault: false } : { name: "", title: "", isDefault: true },
   };
 }
@@ -70,7 +69,7 @@ export type MemoInput = {
   creator: Creator; // ผู้จัดทำ (ผู้ขออนุมัติค่าเริ่มต้น)
   signers?: ChosenSigners; // ผู้ลงนามที่เลือกไว้กับใบเบิก
   approvedAt?: Date | null; // อนุมัติในระบบแล้ว → พิมพ์เวลาอนุมัติใต้ชื่อผู้อนุมัติ
-  settings: MemoSettings;
+  texts: MemoTexts;
 };
 
 export type MemoData = {
@@ -98,10 +97,10 @@ export type MemoData = {
 };
 
 export function buildMemo(input: MemoInput): MemoData {
-  const { settings: s } = input;
+  const { texts: s } = input;
   const amount = formatAmount(input.amount);
   const lines = 1; // v1: 1 ใบเบิก = 1 ศูนย์ = 1 เลขหมาย
-  const { requester, approver } = resolveSigners(input.signers, input.creator, s);
+  const { requester, approver } = resolveSigners(input.signers, input.creator);
 
   return {
     company: COMPANY_NAME,
@@ -123,6 +122,6 @@ export function buildMemo(input: MemoInput): MemoData {
     requester: { name: requester.name, title: requester.title },
     approver: { name: approver.name, title: approver.title },
     approvedNote: input.approvedAt ? `อนุมัติในระบบ ${formatThaiDateTime(input.approvedAt)} น.` : null,
-    formCode: s.formCode,
+    formCode: FORM_CODE,
   };
 }

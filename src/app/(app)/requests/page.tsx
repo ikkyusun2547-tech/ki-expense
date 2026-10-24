@@ -82,7 +82,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
       <PageHeader
         icon={Receipt}
         title="ใบเบิก"
-        description="ใบเบิกค่าอินเทอร์เน็ต 3BB ของทุกศูนย์ (แสดงล่าสุด 200 รายการ)"
+        description="ใบเบิกทุกศูนย์ (ล่าสุด 200 ใบ)"
         actions={
           canCreateRequest(user.role) && (
             <ButtonLink href="/requests/new" icon={Plus}>

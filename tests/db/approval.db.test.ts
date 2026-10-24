@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GET as getRequestPdf } from "@/app/api/requests/[id]/pdf/route";
-import { findCenterByCode } from "@/server/actions/requests";
+import { initialFormState } from "@/lib/formState";
+import { approveMany, findCenterByCode } from "@/server/actions/requests";
 import { db } from "@/server/db";
+import { run } from "./helpers";
 import { requestFixtures } from "./requestFixtures";
 
 // อนุมัติในระบบ (2026-10-24): สร้างแล้ว → ส่งขออนุมัติ → ผู้อนุมัติที่เลือกไว้อนุมัติ (เข้าคิวบัญชี) / ไม่อนุมัติ (กลับไปแก้)
@@ -100,8 +102,43 @@ describe("ฟอร์มใบเบิก: เลือกผู้อนุ�
     const c = await center();
     await loginAs("CREATOR");
     expect(await save({ ...valid(c.id), approverId: await userId("CREATOR2"), intent: "submit" })).toMatchObject({
-      result: { error: expect.stringContaining("ไม่พบผู้อนุมัติ") },
+      result: { error: expect.stringContaining("ไม่พบผู้ลงนาม") },
     });
+  });
+
+  it("เลือกผู้ขออนุมัติในฟอร์มได้ (ผู้จัดทำคนอื่น); กลับเป็นค่าเริ่มต้นได้; เลือกผู้อนุมัติในช่องผู้ขอไม่ได้", async () => {
+    const c = await center();
+    await loginAs("CREATOR");
+    const id = idFrom(await save({ ...valid(c.id), requesterId: await userId("CREATOR2"), intent: "save" }));
+    expect(await requestOf(id)).toMatchObject({ requesterName: "ทดสอบ creator2", requesterTitle: "เจ้าหน้าที่ GPS" });
+
+    idFrom(await save({ ...valid(c.id), id, requesterId: "", intent: "save" }, null));
+    const r = await requestOf(id);
+    expect(r).toMatchObject({ requesterId: null, requesterName: null });
+    expect(r.logs.at(-1)?.note).toBe("ผู้ขออนุมัติ: ผู้จัดทำ");
+
+    expect(await save({ ...valid(c.id), id, requesterId: await userId("APPROVER"), intent: "save" }, null)).toMatchObject({
+      result: { error: expect.stringContaining("ไม่พบผู้ลงนาม") },
+    });
+  });
+
+  it("ข้อความ จาก/เรียน/เพื่อ เป็นของแต่ละใบ: ไม่ส่ง = ตามฟอร์มจริง, ส่งมา = เก็บกับใบนั้น, เว้นว่าง = ตามฟอร์มจริง", async () => {
+    await loginAs("CREATOR");
+    const a = idFrom(await save({ ...valid((await center()).id), intent: "save" }));
+    expect(await requestOf(a)).toMatchObject({ department: "ฝ่ายจัดหาวัตถุดิบ", purpose: "โปรดพิจารณา" });
+
+    const b = idFrom(
+      await save({ ...valid((await center()).id), department: " ฝ่ายบัญชี ", recipient: "ผู้จัดการ", purpose: "", intent: "save" }),
+    );
+    expect(await requestOf(b)).toMatchObject({ department: "ฝ่ายบัญชี", recipient: "ผู้จัดการ", purpose: "โปรดพิจารณา" });
+    expect((await requestOf(a)).department).toBe("ฝ่ายจัดหาวัตถุดิบ"); // ใบอื่นไม่เปลี่ยน
+
+    // แก้ข้อความ → log บอก; แก้โดยไม่ส่งช่องข้อความ = คงเดิม
+    const cB = (await requestOf(b)).centerId;
+    idFrom(await save({ ...valid(cB), id: b, department: "ฝ่ายใหม่", recipient: "ผู้จัดการ", purpose: "โปรดพิจารณา", intent: "save" }, null));
+    expect((await requestOf(b)).logs.at(-1)?.note).toBe("แก้ข้อความ จาก/เรียน/เพื่อ");
+    idFrom(await save({ ...valid(cB, { invoiceNo: "INV-9" }), id: b, intent: "save" }, null));
+    expect((await requestOf(b)).department).toBe("ฝ่ายใหม่");
   });
 
   it("แก้ไขเปลี่ยนผู้อนุมัติ → log บอกคนใหม่; ไม่ส่งช่องผู้อนุมัติ = คงเดิม", async () => {
@@ -198,5 +235,36 @@ describe("ส่งขออนุมัติ / อนุมัติ / ไม�
     await loginAs("ADMIN");
     expect(await status(id, "REVERT", "เลือกศูนย์ผิด")).toEqual({ redirect: `/requests/${id}` });
     expect(await requestOf(id)).toMatchObject({ status: "CREATED", approvedAt: null });
+  });
+});
+
+describe("อนุมัติทีละหลายใบ", () => {
+  const approveIds = (ids: string[]) => {
+    const fd = new FormData();
+    for (const id of ids) fd.append("ids", id);
+    return run(() => approveMany(initialFormState, fd));
+  };
+
+  it("อนุมัติเฉพาะใบที่ส่งมาให้ตัวเอง ใบอื่นข้ามแล้วแจ้งจำนวน", async () => {
+    const mine1 = await pendingRequest((await center()).id);
+    const mine2 = await pendingRequest((await center()).id);
+    // ใบของผู้อนุมัติอีกคน
+    await loginAs("CREATOR");
+    const other = idFrom(await save(valid((await center()).id)));
+    await pickSigners(other, "", await userId("APPROVER2"));
+    await status(other, "SUBMIT");
+
+    await loginAs("APPROVER");
+    expect(await approveIds([mine1, mine2, other])).toEqual({ redirect: "/approvals?done=approve&n=2&fail=1" });
+    expect((await requestOf(mine1)).status).toBe("APPROVED");
+    expect((await requestOf(mine2)).status).toBe("APPROVED");
+    expect((await requestOf(other)).status).toBe("PENDING");
+  });
+
+  it("ไม่เลือกเลย → แจ้งให้เลือก; ผู้จัดทำเรียกไม่ได้", async () => {
+    await loginAs("APPROVER");
+    expect(await approveIds([])).toEqual({ result: { error: "เลือกใบเบิกที่จะอนุมัติก่อน" } });
+    await loginAs("CREATOR");
+    expect(await approveIds(["x"])).toEqual({ redirect: "/" });
   });
 });

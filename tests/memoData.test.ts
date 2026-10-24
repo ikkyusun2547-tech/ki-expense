@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildMemo, chosenSignersOf, DEFAULT_MEMO_SETTINGS, resolveSigners } from "@/lib/pdf/memoData";
+import { buildMemo, chosenSignersOf, DEFAULT_MEMO_TEXTS, resolveSigners } from "@/lib/pdf/memoData";
 
 // ตัวอย่างจากฟอร์มจริง: บันทึกภายใน 16 ต.ค. 2569 ห้องรับรองคุณมั่นคง 749.00 ครบกำหนด 12/11/2569
-const settings = {
-  ...DEFAULT_MEMO_SETTINGS,
-  department: "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์",
-  requesterTitle: "เจ้าหน้าที่รัฐกิจสัมพันธ์",
-};
+const texts = { ...DEFAULT_MEMO_TEXTS, department: "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์" };
 
 const approver = { name: "นายทดสอบ อนุมัติ", title: "รักษาการผู้จัดการส่วนรัฐกิจและหลักทรัพย์" };
 
@@ -16,9 +12,9 @@ const base = {
   serviceUser: "ห้องรับรองคุณมั่นคง",
   amount: "749",
   dueDate: "2026-11-12",
-  creator: { name: "นางสาวทดสอบ จัดทำ", title: null },
+  creator: { name: "นางสาวทดสอบ จัดทำ", title: "เจ้าหน้าที่รัฐกิจสัมพันธ์" },
   signers: { requester: null, approver },
-  settings,
+  texts,
 };
 
 const memo = buildMemo(base);
@@ -52,7 +48,7 @@ describe("buildMemo", () => {
     );
   });
 
-  it("ผู้ขออนุมัติ = ผู้จัดทำ (ไม่มีตำแหน่งในบัญชี → ตำแหน่งจากค่าตั้ง); ผู้อนุมัติตามที่เลือก; ยังไม่อนุมัติ", () => {
+  it("ผู้ขออนุมัติ = ผู้จัดทำ + ตำแหน่งในบัญชี; ผู้อนุมัติตามที่เลือก; ยังไม่อนุมัติ; รหัสฟอร์มคงที่", () => {
     expect(memo.requester).toEqual({ name: "นางสาวทดสอบ จัดทำ", title: "เจ้าหน้าที่รัฐกิจสัมพันธ์" });
     expect(memo.approver).toEqual(approver);
     expect(memo.approvedNote).toBeNull();
@@ -94,7 +90,7 @@ describe("ผู้ลงนามที่เลือกต่อใบเบ�
   });
 
   it("resolveSigners บอกว่าเป็นค่าเริ่มต้นหรือไม่", () => {
-    const r = resolveSigners({ requester: chosen.requester, approver: null }, { name: "ผู้จัดทำ", title: null }, settings);
+    const r = resolveSigners({ requester: chosen.requester, approver: null }, { name: "ผู้จัดทำ", title: null });
     expect(r.requester).toEqual({ ...chosen.requester, isDefault: false });
     expect(r.approver).toEqual({ name: "", title: "", isDefault: true });
   });

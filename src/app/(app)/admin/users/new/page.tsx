@@ -8,7 +8,7 @@ export default async function NewUserPage() {
 
   return (
     <>
-      <PageHeader icon={UserPlus} title="เพิ่มผู้ใช้" description="เลือกบทบาท กรอกข้อมูล และตั้งรหัสผ่านเริ่มต้น — ผู้ใช้ต้องตั้งรหัสใหม่เองตอนล็อกอินครั้งแรก" />
+      <PageHeader icon={UserPlus} title="เพิ่มผู้ใช้" description="ผู้ใช้จะตั้งรหัสผ่านใหม่เองตอนล็อกอินครั้งแรก" />
       <Card className="max-w-2xl">
         <CreateUserForm />
       </Card>

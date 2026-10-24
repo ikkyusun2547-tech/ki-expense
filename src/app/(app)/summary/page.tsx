@@ -58,7 +58,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
       <PageHeader
         icon={LayoutDashboard}
         title="สรุปรายศูนย์"
-        description={`สถานะการเบิกของศูนย์ที่ใช้งานอยู่ ${rows.length} ศูนย์ ณ วันที่ ${formatThaiDate(today, "long")}`}
+        description={`${rows.length} ศูนย์ · ณ ${formatThaiDate(today, "long")}`}
       />
 
       {(sent || drafts > 0) && (
@@ -106,66 +106,96 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
         </div>
       )}
 
-      <TableCard>
-        <table className={tableClass}>
-          <thead>
-            <tr>
-              <th className={thClass}>ศูนย์</th>
-              <th className={`${thClass} text-center`}>ครบกำหนดทุกวันที่</th>
-              <th className={thClass}>รอบที่ติดตาม</th>
-              <th className={thClass}>สถานะการเบิก</th>
-              <th className={thClass}>สถานะใบเบิก</th>
-              <th className={thClass} />
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((r) => (
-              <tr key={r.center.id} className={rowClass}>
-                <td className={tdClass}>
-                  <NameCell name={r.center.name} code={r.center.customerCode} />
-                </td>
-                <td className={`${tdClass} text-center tabular-nums`}>{r.center.dueDay}</td>
-                <td className={`${tdClass} whitespace-nowrap`}>
-                  <div className="flex flex-col items-start gap-1">
-                    <span>{formatThaiDate(r.dueDate)}</span>
-                    {r.state !== "REQUESTED" && <DueBadge daysLeft={r.daysLeft} />}
-                  </div>
-                </td>
-                <td className={tdClass}>
-                  <Badge tone={STATE[r.state].tone}>{STATE[r.state].label}</Badge>
-                </td>
-                <td className={tdClass}>
-                  {r.request ? <RequestStatusBadge status={r.request.status} /> : <span className="text-slate-300">–</span>}
-                </td>
-                {/* ปุ่มขนาด/ความกว้างเท่ากันทุกแถว ชิดขวา */}
-                <td className={`${tdClass} text-right`}>
-                  {r.request ? (
-                    <ButtonLink href={`/requests/${r.request.id}`} variant="secondary" size="sm" icon={FileText} className="w-32">
-                      ดูใบเบิก
-                    </ButtonLink>
-                  ) : (
-                    isCreator && (
-                      <ButtonLink
-                        href={`/requests/new?code=${encodeURIComponent(r.center.customerCode)}`}
-                        size="sm"
-                        icon={Plus}
-                        className="w-32"
-                      >
-                        สร้างใบเบิก
-                      </ButtonLink>
-                    )
-                  )}
-                </td>
+      {/* จอเล็ก: การ์ดทีละศูนย์ (ปุ่มสร้าง/ดูใบเบิกเห็นทันที) — จอใหญ่: ตาราง */}
+      <ul className="flex flex-col gap-3 md:hidden">
+        {shown.map((r) => (
+          <li key={r.center.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <NameCell name={r.center.name} code={r.center.customerCode} />
+              <StatusBadge row={r} />
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+              ครบกำหนด {formatThaiDate(r.dueDate)}
+              {r.state !== "REQUESTED" && <DueBadge daysLeft={r.daysLeft} />}
+            </div>
+            <div className="mt-3">
+              <RowAction row={r} isCreator={isCreator} fullWidth />
+            </div>
+          </li>
+        ))}
+        {shown.length === 0 && (
+          <li className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
+            {filter ? "ไม่มีศูนย์ในสถานะนี้" : "ยังไม่มีศูนย์ที่ใช้งานอยู่ในทะเบียน"}
+          </li>
+        )}
+      </ul>
+
+      <div className="hidden md:block">
+        <TableCard>
+          <table className={tableClass}>
+            <thead>
+              <tr>
+                <th className={thClass}>ศูนย์</th>
+                <th className={thClass}>ครบกำหนดรอบนี้</th>
+                <th className={thClass}>สถานะ</th>
+                <th className={thClass} />
               </tr>
-            ))}
-            {shown.length === 0 && (
-              <EmptyRow colSpan={6} icon={Inbox}>
-                {filter ? "ไม่มีศูนย์ในสถานะนี้" : "ยังไม่มีศูนย์ที่ใช้งานอยู่ในทะเบียน"}
-              </EmptyRow>
-            )}
-          </tbody>
-        </table>
-      </TableCard>
+            </thead>
+            <tbody>
+              {shown.map((r) => (
+                <tr key={r.center.id} className={rowClass}>
+                  <td className={tdClass}>
+                    <NameCell name={r.center.name} code={r.center.customerCode} />
+                  </td>
+                  <td className={`${tdClass} whitespace-nowrap`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{formatThaiDate(r.dueDate)}</span>
+                      {r.state !== "REQUESTED" && <DueBadge daysLeft={r.daysLeft} />}
+                    </div>
+                    <div className="text-xs text-slate-400">ครบกำหนดทุกวันที่ {r.center.dueDay}</div>
+                  </td>
+                  <td className={tdClass}>
+                    <StatusBadge row={r} />
+                  </td>
+                  <td className={`${tdClass} text-right`}>
+                    <RowAction row={r} isCreator={isCreator} />
+                  </td>
+                </tr>
+              ))}
+              {shown.length === 0 && (
+                <EmptyRow colSpan={4} icon={Inbox}>
+                  {filter ? "ไม่มีศูนย์ในสถานะนี้" : "ยังไม่มีศูนย์ที่ใช้งานอยู่ในทะเบียน"}
+                </EmptyRow>
+              )}
+            </tbody>
+          </table>
+        </TableCard>
+      </div>
     </>
+  );
+}
+
+type Row = Awaited<ReturnType<typeof getCenterSummaries>>[number];
+
+// สถานะเดียว: ยังไม่เบิก → สถานะการเบิก (เลยกำหนด/ใกล้ครบ/ยังไม่ถึงรอบ) · เบิกแล้ว → สถานะของใบเบิกนั้น
+function StatusBadge({ row }: { row: Row }) {
+  return row.request ? <RequestStatusBadge status={row.request.status} /> : <Badge tone={STATE[row.state].tone}>{STATE[row.state].label}</Badge>;
+}
+
+// เบิกแล้ว → ดูใบเบิก · ยังไม่เบิก → สร้างใบเบิก (เฉพาะผู้จัดทำ)
+function RowAction({ row, isCreator, fullWidth }: { row: Row; isCreator: boolean; fullWidth?: boolean }) {
+  const width = fullWidth ? "w-full" : "w-32";
+  if (row.request) {
+    return (
+      <ButtonLink href={`/requests/${row.request.id}`} variant="secondary" size="sm" icon={FileText} className={width}>
+        ดูใบเบิก
+      </ButtonLink>
+    );
+  }
+  if (!isCreator) return null;
+  return (
+    <ButtonLink href={`/requests/new?code=${encodeURIComponent(row.center.customerCode)}`} size="sm" icon={Plus} className={width}>
+      สร้างใบเบิก
+    </ButtonLink>
   );
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, Banknote, Check, CircleX, Clock, FileText, Paperclip, Pencil, PenLine, Printer, Receipt, Send, Stamp, Trash, Undo2 } from "lucide-react";
+import { ArrowLeft, Banknote, Check, CircleX, Clock, FileText, Paperclip, Pencil, Printer, Receipt, Send, Stamp, Trash, Undo2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import type { LogAction, RequestStatus } from "@/generated/prisma/enums";
@@ -6,14 +6,12 @@ import { RequestStatusBadge } from "@/components/StatusBadge";
 import { Alert, ButtonAnchor, ButtonLink, Card, CardTitle, cx, PageHeader, type IconType } from "@/components/ui";
 import { formatAmount } from "@/lib/money";
 import { chosenSignersOf, resolveSigners, type ResolvedSigner } from "@/lib/pdf/memoData";
-import { ACTION_LABEL, canPerform, checkSignerChange, isAssignedApprover, returnedBy, STATUS_LABEL } from "@/lib/status";
+import { ACTION_LABEL, canPerform, isAssignedApprover, returnedBy, STATUS_LABEL } from "@/lib/status";
 import { bahtText } from "@/lib/thai/bahtText";
 import { daysInclusive, formatThaiDate, formatThaiDateTime, toISODate, todayISO } from "@/lib/thai/date";
 import { requireUser } from "@/server/auth";
 import { db } from "@/server/db";
-import { getReportSettings } from "@/server/services/reportSettings";
 import { PayForm } from "../../accounting/PayForm";
-import { SignerPicker, type SignerOption, type SignerSlot } from "./SignerPicker";
 import { StatusActions } from "./StatusActions";
 
 const STEPS: RequestStatus[] = ["CREATED", "PENDING", "APPROVED", "PAID"];
@@ -30,7 +28,7 @@ const LOG_ICON: Record<LogAction, { icon: IconType; className: string }> = {
   DELETE: { icon: Trash, className: "bg-red-100 text-red-700" },
 };
 
-export default async function RequestDetailPage({ params, searchParams }: PageProps<"/requests/[id]">) {
+export default async function RequestDetailPage({ params }: PageProps<"/requests/[id]">) {
   // ทุกบทบาทดูรายละเอียดได้ (บัญชีเปิดจากหน้าฝ่ายบัญชี) — ปุ่มที่ทำได้ขึ้นกับ state machine
   const user = await requireUser();
   const backHref = { ACCOUNTING: "/accounting", APPROVER: "/approvals", CREATOR: "/requests", ADMIN: "/requests" }[user.role];
@@ -53,34 +51,10 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
   const differsFromNormal = !request.amount.equals(request.center.normalAmount);
 
   // ผู้ลงนามที่จะพิมพ์ในใบเบิก: ที่เลือกไว้กับใบนี้ (บัญชีผู้ใช้) หรือค่าเริ่มต้น
-  const settings = await getReportSettings();
-  const signers = resolveSigners(chosenSignersOf(request), request.createdBy, settings);
-  const canChangeSigners = !deleted && checkSignerChange(user.role, request.status).ok;
-  const savedSigners = (await searchParams).signers === "1";
+  const signers = resolveSigners(chosenSignersOf(request), request.createdBy);
   const isMyApproval = !deleted && request.status === "PENDING" && isAssignedApprover(user.id, request);
   // ถูกตีกลับ → แสดงเหตุผลบนสุด (ไม่ต้องไล่หาในประวัติ)
   const returned = deleted ? null : returnedBy(request.status, request.logs);
-
-  let requesterSlot: SignerSlot | null = null;
-  let approverSlot: SignerSlot | null = null;
-  if (canChangeSigners) {
-    const users = await db.user.findMany({
-      where: { role: { in: ["CREATOR", "APPROVER"] }, active: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, title: true, role: true },
-    });
-    const options = (role: "CREATOR" | "APPROVER") =>
-      users.filter((u) => u.role === role).map((u) => ({ value: u.id, label: u.name, title: u.title ?? "" }));
-    const defaultRequester = resolveSigners(undefined, request.createdBy, settings).requester;
-    requesterSlot = signerSlot(request.requesterId, { name: request.requesterName, title: request.requesterTitle }, [
-      { value: "", label: `ผู้จัดทำ: ${defaultRequester.name}`, title: defaultRequester.title },
-      ...options("CREATOR"),
-    ]);
-    approverSlot = signerSlot(request.approverId, { name: request.approverName, title: request.approverTitle }, [
-      { value: "", label: "— เลือกผู้อนุมัติ —", title: "" },
-      ...options("APPROVER"),
-    ]);
-  }
 
   return (
     <>
@@ -145,28 +119,12 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
                 {formatAmount(request.center.normalAmount)} บาท
                 {differsFromNormal && <span className="ml-2 text-xs font-medium text-amber-700">ยอดเบิกไม่เท่ายอดปกติ</span>}
               </Item>
-              <Item label="ใบแจ้งหนี้">
-                {request.invoiceFileKey ? (
-                  <a
-                    href={`/api/requests/${request.id}/invoice`}
-                    target="_blank"
-                    rel="noopener"
-                    className="inline-flex items-center gap-1 font-medium text-emerald-700 hover:underline"
-                  >
-                    <Paperclip className="size-3.5" aria-hidden />
-                    {request.invoiceFileName ?? "เปิดไฟล์"}
-                  </a>
-                ) : (
-                  <span className="text-amber-700">ไม่ได้แนบไฟล์</span>
-                )}
-              </Item>
               <Item label="ผู้จัดทำ">{request.createdBy.name}</Item>
-              <Item label="ผู้อนุมัติ">
-                {request.approverName ?? <span className="text-amber-700">ยังไม่เลือก</span>}
-                {request.approvedAt && (
-                  <div className="text-xs text-emerald-700">อนุมัติแล้ว {formatThaiDateTime(request.approvedAt)} น.</div>
-                )}
-              </Item>
+              {!request.invoiceFileKey && (
+                <Item label="ใบแจ้งหนี้">
+                  <span className="text-amber-700">ไม่ได้แนบไฟล์</span>
+                </Item>
+              )}
               {request.paidDate && <Item label="วันที่จ่าย">{formatThaiDate(toISODate(request.paidDate))}</Item>}
               {request.paymentRef && (
                 <Item label="เลขอ้างอิงการจ่าย">
@@ -174,7 +132,18 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
                 </Item>
               )}
             </dl>
+            {/* ผู้ลงนาม (ที่พิมพ์ในใบเบิก) — แสดงอย่างเดียว เปลี่ยนได้ที่ "แก้ไข" */}
+            <dl className="grid gap-x-6 gap-y-4 border-t border-slate-100 px-6 py-5 text-sm sm:grid-cols-2">
+              <SignerItem label="ผู้ขออนุมัติ" signer={signers.requester} />
+              <SignerItem label="ผู้อนุมัติ" signer={signers.approver}>
+                {request.approvedAt && (
+                  <div className="text-xs font-medium text-emerald-700">อนุมัติแล้ว {formatThaiDateTime(request.approvedAt)} น.</div>
+                )}
+              </SignerItem>
+            </dl>
           </Card>
+
+          {request.invoiceFileKey && <InvoicePreview id={request.id} fileKey={request.invoiceFileKey} fileName={request.invoiceFileName} />}
 
           <Card>
             <CardTitle icon={Clock}>ประวัติ</CardTitle>
@@ -230,7 +199,7 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
               <StatusActions
                 id={request.id}
                 canSubmit={can("SUBMIT")}
-                submitBlocked={request.approverId ? undefined : "เลือกผู้อนุมัติในกล่อง “ผู้ลงนามในใบเบิก” ก่อน"}
+                submitBlocked={request.approverId ? undefined : "ยังไม่ได้เลือกผู้อนุมัติ — กด “แก้ไข” เพื่อเลือก"}
                 approverName={request.approverName}
                 canApprove={isMyApproval}
                 canDelete={can("DELETE")}
@@ -248,20 +217,6 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
             </div>
           </Card>
 
-          {!deleted && (
-            <Card>
-              <CardTitle icon={PenLine}>ผู้ลงนามในใบเบิก</CardTitle>
-              {requesterSlot && approverSlot ? (
-                <SignerPicker id={request.id} requester={requesterSlot} approver={approverSlot} saved={savedSigners} />
-              ) : (
-                <dl className="flex flex-col gap-4 text-sm">
-                  <SignerItem label="ผู้ขออนุมัติ" signer={signers.requester} />
-                  <SignerItem label="ผู้อนุมัติ" signer={signers.approver} />
-                </dl>
-              )}
-            </Card>
-          )}
-
           {can("PAY") && (
             <Card>
               <CardTitle icon={Banknote}>บันทึกการจ่าย</CardTitle>
@@ -271,6 +226,32 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
         </div>
       </div>
     </>
+  );
+}
+
+// ดูใบแจ้งหนี้ในหน้าเลย (ผู้อนุมัติ/บัญชีไม่ต้องเปิดแท็บใหม่) — ไฟล์มาจาก route ที่ตรวจสิทธิ์แล้ว
+// PDF ใช้ตัวแสดงผลของเบราว์เซอร์ (มือถือบางรุ่นแสดงไม่ได้ จึงมีลิงก์เปิดแท็บใหม่ไว้เสมอ)
+function InvoicePreview({ id, fileKey, fileName }: { id: string; fileKey: string; fileName: string | null }) {
+  const src = `/api/requests/${id}/invoice`;
+  const isPdf = fileKey.endsWith(".pdf");
+  return (
+    <Card flush>
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+        <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold text-slate-900">
+          <Paperclip className="size-4 shrink-0 text-slate-400" aria-hidden />
+          <span className="truncate">ใบแจ้งหนี้{fileName && <span className="font-normal text-slate-500"> · {fileName}</span>}</span>
+        </h2>
+        <a href={src} target="_blank" rel="noopener" className="shrink-0 text-sm font-medium text-emerald-700 hover:underline">
+          เปิดในแท็บใหม่
+        </a>
+      </div>
+      {isPdf ? (
+        <iframe src={`${src}#view=FitH`} title="ใบแจ้งหนี้" className="h-[70vh] min-h-96 w-full rounded-b-xl bg-slate-100" />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element -- ไฟล์จาก API ที่ต้องล็อกอิน ไม่ผ่าน next/image
+        <img src={src} alt={`ใบแจ้งหนี้ ${fileName ?? ""}`} className="mx-auto max-h-[70vh] w-auto rounded-b-xl p-4" />
+      )}
+    </Card>
   );
 }
 
@@ -305,17 +286,12 @@ function Stepper({ status }: { status: RequestStatus }) {
   );
 }
 
-// ตัวเลือกผู้ลงนาม = บัญชีผู้ใช้ที่ใช้งานอยู่ (+ คนที่เลือกไว้เดิม ถ้าบัญชีถูกปิดไปแล้ว — แสดงตามสำเนาที่บันทึกไว้)
-function signerSlot(chosenId: string | null, saved: { name: string | null; title: string | null }, options: SignerOption[]): SignerSlot {
-  if (!chosenId || options.some((o) => o.value === chosenId)) return { value: chosenId ?? "", options };
-  return { value: chosenId, options: [...options, { value: chosenId, label: `${saved.name} (ปิดบัญชีแล้ว)`, title: saved.title ?? "" }] };
-}
-
-function SignerItem({ label, signer }: { label: string; signer: ResolvedSigner }) {
+function SignerItem({ label, signer, children }: { label: string; signer: ResolvedSigner; children?: ReactNode }) {
   return (
     <Item label={label}>
-      {signer.name || <span className="text-slate-400">ยังไม่เลือก</span>}
+      {signer.name || <span className="text-amber-700">ยังไม่เลือก</span>}
       {signer.title && <div className="text-xs text-slate-500">{signer.title}</div>}
+      {children}
     </Item>
   );
 }

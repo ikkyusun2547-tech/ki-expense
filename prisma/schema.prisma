@@ -125,6 +125,10 @@ model Request {
   approverName    String?
   approverTitle   String?
   approvedAt      DateTime? // เวลาที่ผู้อนุมัติกดอนุมัติ — พิมพ์ในใบเบิก
+  // ข้อความหัวบันทึกของใบนี้ (ผู้จัดทำกรอกในฟอร์ม ค่าเริ่มต้น = ใบล่าสุดของตน) — แทนหน้าตั้งค่ากลางที่เลิกใช้
+  department      String // จาก (ฝ่าย) — ใช้ในย่อหน้า "... ขอเบิกค่าใช้บริการ" ด้วย
+  recipient       String // เรียน
+  purpose         String // เพื่อ
   createdById     String
   deletedAt       DateTime? // soft delete: ลบได้เฉพาะสถานะ CREATED
   createdAt       DateTime      @default(now())
@@ -139,18 +143,6 @@ model Request {
   @@index([centerId, periodStart])
   @@index([status, dueDate])
   @@index([approverId, status])
-}
-
-// ข้อความบนใบเบิก (บันทึกภายใน FM-50000-02) ที่ admin แก้ได้ — มีแถวเดียว (id = 1)
-// ถ้ายังไม่มีแถว ใช้ค่าเริ่มต้นใน src/lib/pdf/memoData.ts
-model ReportSetting {
-  id             Int      @id @default(1)
-  department     String // จาก (ฝ่าย)
-  recipient      String // เรียน
-  purpose        String // เพื่อ
-  requesterTitle String // ตำแหน่งผู้ขออนุมัติ เมื่อผู้ใช้ยังไม่ได้ใส่ตำแหน่งในบัญชี
-  formCode       String // ท้ายกระดาษ เช่น FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566
-  updatedAt      DateTime @updatedAt
 }
 
 // ประวัติการเปลี่ยนสถานะ เพิ่มอย่างเดียว (trigger ใน DB ปฏิเสธ UPDATE/DELETE)

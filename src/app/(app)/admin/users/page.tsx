@@ -24,7 +24,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
       <PageHeader
         icon={Users}
         title="ผู้ใช้"
-        description="สร้างบัญชีให้ผู้จัดทำ ฝ่ายบัญชี และผู้อนุมัติ — ผู้ใช้ต้องตั้งรหัสใหม่เองตอนล็อกอินครั้งแรก"
+        description="บัญชีของผู้จัดทำ ผู้อนุมัติ และฝ่ายบัญชี"
         actions={
           <ButtonLink href="/admin/users/new" icon={Plus}>
             เพิ่มผู้ใช้

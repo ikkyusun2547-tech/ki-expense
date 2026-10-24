@@ -3,7 +3,6 @@ import { toISODate, todayISO } from "@/lib/thai/date";
 import { requireUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { renderInternalMemo } from "@/server/pdf";
-import { getReportSettings } from "@/server/services/reportSettings";
 
 // ใบเบิก PDF (บันทึกภายใน FM-50000-02) สำหรับพิมพ์ไปเซ็น — ทุกบทบาทที่ล็อกอินเปิดได้ ยกเว้นใบที่ถูกลบ
 export async function GET(_request: Request, ctx: RouteContext<"/api/requests/[id]/pdf">) {
@@ -26,7 +25,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/requests/[i
       creator: request.createdBy,
       signers: chosenSignersOf(request),
       approvedAt: request.approvedAt,
-      settings: await getReportSettings(),
+      texts: request, // จาก / เรียน / เพื่อ ของใบนี้
     }),
   );
   const fileName = encodeURIComponent(`ใบเบิก-${request.center.name}-${toISODate(request.dueDate)}.pdf`);

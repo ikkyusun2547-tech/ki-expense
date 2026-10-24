@@ -5,6 +5,7 @@ import type { CenterStatus } from "@/generated/prisma/enums";
 import type { FormState } from "@/lib/formState";
 import { suggestRequest, type RequestSuggestion } from "@/lib/rules/requestDefaults";
 import type { Issue } from "@/lib/rules/requestRules";
+import { fieldErrorsOf, memoTextsSchema } from "@/lib/validation";
 import { toISODate, todayISO } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
@@ -82,14 +83,21 @@ export async function saveRequest(_prev: RequestFormState, formData: FormData): 
   const upload = formData.get("invoiceFile");
   const file = upload instanceof File && upload.size > 0 ? upload : null;
   const confirmWarnings = text("confirmWarnings") === "1";
-  // ไม่มีช่องผู้อนุมัติในฟอร์ม = ไม่เปลี่ยน, ช่องว่าง = ไม่เลือก
-  const approverId = formData.has("approverId") ? text("approverId") || null : undefined;
+  // ผู้ลงนาม: ไม่มีช่องในฟอร์ม = ไม่เปลี่ยน, ช่องว่าง = ค่าเริ่มต้น (ผู้ขอ = ผู้จัดทำ, ผู้อนุมัติ = ยังไม่เลือก)
+  const optional = (key: string) => (formData.has(key) ? text(key) || null : undefined);
+  const approverId = optional("approverId");
+  const requesterId = optional("requesterId");
+  // จาก / เรียน / เพื่อ ของใบนี้ — ไม่มีในฟอร์ม = ไม่เปลี่ยน (สร้างใหม่ = ข้อความตามฟอร์มจริง)
+  const texts = formData.has("department")
+    ? memoTextsSchema.safeParse({ department: text("department"), recipient: text("recipient"), purpose: text("purpose") })
+    : null;
+  if (texts && !texts.success) return { error: Object.values(fieldErrorsOf(texts.error)).flat()[0] };
   const submit = text("intent") === "submit";
   if (submit && !approverId) return { error: "เลือกผู้อนุมัติก่อนส่งขออนุมัติ" };
 
   const outcome = id
-    ? await updateRequest({ requestId: id, input, file, confirmWarnings, approverId, actor })
-    : await createRequest({ centerId: text("centerId"), input, file, confirmWarnings, approverId, actor });
+    ? await updateRequest({ requestId: id, input, file, confirmWarnings, approverId, requesterId, texts: texts?.data, actor })
+    : await createRequest({ centerId: text("centerId"), input, file, confirmWarnings, approverId, requesterId, texts: texts?.data, actor });
 
   if (!outcome.ok) return { error: outcome.error, blocks: outcome.blocks, warnings: outcome.warnings };
   if (!submit) redirect(`/requests/${outcome.id}`);
@@ -120,6 +128,23 @@ export async function changeRequestStatus(_prev: FormState, formData: FormData):
   if (!outcome.ok) return { error: outcome.error };
 
   redirect(REDIRECT_AFTER[action] ?? `/requests/${requestId}`);
+}
+
+// ids ที่ติ๊กเลือกในหน้ารายการ (ตัดซ้ำ — จอเล็ก/ใหญ่มีช่องติ๊กคนละชุด)
+const selectedIds = (formData: FormData) => [...new Set(formData.getAll("ids").map(String))].filter(Boolean);
+
+// ผู้อนุมัติอนุมัติทีละหลายใบ — แต่ละใบตรวจสิทธิ์/สถานะแยกกันใน service (ใบที่ไม่ผ่านข้ามไป แล้วแจ้งจำนวน)
+export async function approveMany(_prev: FormState, formData: FormData): Promise<FormState> {
+  const actor = await requireRole("APPROVER");
+
+  const ids = selectedIds(formData);
+  if (ids.length === 0) return { error: "เลือกใบเบิกที่จะอนุมัติก่อน" };
+
+  let ok = 0;
+  for (const requestId of ids) {
+    if ((await transitionRequest({ requestId, action: "APPROVE", actor })).ok) ok++;
+  }
+  redirect(`/approvals?done=approve&n=${ok}${ok < ids.length ? `&fail=${ids.length - ok}` : ""}`);
 }
 
 // เลือกผู้ขออนุมัติ/ผู้อนุมัติที่จะพิมพ์ในใบเบิกนี้ — สิทธิ์ตามสถานะตรวจซ้ำใน service

@@ -18,10 +18,9 @@ export type NavItem = { href: string; label: string; group?: "admin" };
 
 const SUMMARY: NavItem = { href: "/summary", label: "สรุปรายศูนย์" };
 const APPROVALS: NavItem = { href: "/approvals", label: "รออนุมัติ" };
-const SETTINGS: NavItem = { href: "/settings", label: "ตั้งค่าใบเบิก" };
 
 export const NAV_ITEMS: Record<Role, NavItem[]> = {
-  CREATOR: [SUMMARY, { href: "/requests", label: "ใบเบิก" }, SETTINGS],
+  CREATOR: [SUMMARY, { href: "/requests", label: "ใบเบิก" }],
   ACCOUNTING: [{ href: "/accounting", label: "ฝ่ายบัญชี" }, SUMMARY],
   APPROVER: [APPROVALS, SUMMARY],
   ADMIN: [

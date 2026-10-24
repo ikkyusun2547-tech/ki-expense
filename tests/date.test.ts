@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   addDays,
+  formatBEInput,
+  maskBEInput,
+  parseBEInput,
   daysInclusive,
   beYear,
   formatBEDate,
@@ -75,5 +78,33 @@ describe("รูปแบบการแสดงผล", () => {
     expect(formatBEDate("2027-01-05")).toBe("05/01/2570");
     expect(thaiMonthName("2026-11-12")).toBe("พฤศจิกายน");
     expect(beYear("2026-11-12")).toBe(2569);
+  });
+});
+
+describe("ช่องกรอกวันที่แบบไทย", () => {
+  it("formatBEInput: ISO → วว/ดด/ปปปป พ.ศ.", () => {
+    expect(formatBEInput("2026-10-04")).toBe("04/10/2569");
+    expect(formatBEInput("")).toBe("");
+  });
+
+  it.each([
+    ["04/10/2569", "2026-10-04"],
+    ["4/10/2569", "2026-10-04"],
+    ["4-10-2569", "2026-10-04"],
+    ["29/02/2567", "2024-02-29"], // ปีอธิกสุรทิน
+    ["04/10/2026", "2026-10-04"], // พิมพ์ ค.ศ. ก็รับได้
+  ])("parseBEInput(%s) → %s", (text, iso) => {
+    expect(parseBEInput(text)).toBe(iso);
+  });
+
+  it.each(["", "4/10", "31/02/2569", "13/13/2569", "04/10/69", "abc"])("parseBEInput(%j) → null", (text) => {
+    expect(parseBEInput(text)).toBeNull();
+  });
+
+  it("maskBEInput: ใส่ / ให้เอง ตัดตัวอักษรอื่นทิ้ง", () => {
+    expect(maskBEInput("04102569")).toBe("04/10/2569");
+    expect(maskBEInput("0410")).toBe("04/10");
+    expect(maskBEInput("04/1")).toBe("04/1");
+    expect(maskBEInput("04a10b2569999")).toBe("04/10/2569");
   });
 });

@@ -101,3 +101,27 @@ export function thaiMonthName(iso: ISODate): string {
 export function beYear(iso: ISODate): number {
   return parts(iso).y + 543;
 }
+
+// ---------- ช่องกรอกวันที่แบบไทย (วว/ดด/ปปปป พ.ศ.) ----------
+
+// "2026-10-04" → "04/10/2569" (ค่าว่าง/ไม่ถูกต้อง → "")
+export function formatBEInput(iso: ISODate): string {
+  return isISODate(iso) ? formatBEDate(iso) : "";
+}
+
+// "4/10/2569" → "2026-10-04"; ปี ≥ 2400 ถือเป็น พ.ศ., ปี 1900–2399 ถือเป็น ค.ศ. (เผื่อพิมพ์ ค.ศ.)
+// รูปแบบผิดหรือวันที่ไม่มีจริง (31/02) → null
+export function parseBEInput(text: string): ISODate | null {
+  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(text.trim());
+  if (!m) return null;
+  const year = +m[3] >= 2400 ? +m[3] - 543 : +m[3];
+  if (year < 1900) return null;
+  const iso = `${year}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  return isISODate(iso) ? iso : null;
+}
+
+// จัดรูปขณะพิมพ์: เหลือแต่ตัวเลข แล้วใส่ / ให้เอง ("04102569" → "04/10/2569")
+export function maskBEInput(text: string): string {
+  const digits = text.replace(/\D/g, "").slice(0, 8);
+  return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join("/");
+}

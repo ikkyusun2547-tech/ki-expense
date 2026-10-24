@@ -66,7 +66,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
       <PageHeader
         icon={Building}
         title="ทะเบียนศูนย์"
-        description={`ศูนย์ทั้งหมด ${total} ศูนย์ — ข้อมูลนี้ใช้ค้นหาตอนสร้างใบเบิก และตรวจยอด/วันครบกำหนด`}
+        description={`ทั้งหมด ${total} ศูนย์`}
         actions={
           <ButtonLink href="/admin/centers/new" icon={Plus}>
             เพิ่มศูนย์

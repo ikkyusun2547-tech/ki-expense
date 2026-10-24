@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { buildMemo, DEFAULT_MEMO_SETTINGS } from "@/lib/pdf/memoData";
+import { buildMemo, DEFAULT_MEMO_TEXTS } from "@/lib/pdf/memoData";
 
 vi.mock("server-only", () => ({}));
 const { renderInternalMemo } = await import("@/server/pdf");
@@ -18,7 +18,7 @@ describe("renderInternalMemo", () => {
       // ผู้อนุมัติ = บัญชีผู้ใช้ที่เลือก (ตำแหน่งตามคนนั้น) + เวลาที่อนุมัติในระบบ
       signers: { requester: null, approver: { name: "นางตัวอย่าง รักษาการ", title: "รักษาการผู้จัดการส่วน" } },
       approvedAt: new Date("2026-10-24T03:30:00Z"),
-      settings: DEFAULT_MEMO_SETTINGS,
+      texts: DEFAULT_MEMO_TEXTS,
     });
     const pdf = await renderInternalMemo(data);
     if (process.env.PDF_SAMPLE) writeFileSync(process.env.PDF_SAMPLE, pdf);

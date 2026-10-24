@@ -3,9 +3,12 @@
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { Check, CircleAlert, Paperclip, Search, Send, Sparkles, TriangleAlert } from "lucide-react";
 import { CenterStatusBadge } from "@/components/StatusBadge";
+import { ThaiDateInput } from "@/components/ThaiDateInput";
+import type { ApproverOption } from "@/server/services/approvers";
 import { Alert, Button, ButtonLink, cx, Field, inputClass, StepTitle } from "@/components/ui";
 import { ACCEPT_ATTR, MAX_UPLOAD_LABEL } from "@/lib/files";
 import { formatAmount } from "@/lib/money";
+import type { MemoTexts } from "@/lib/pdf/memoData";
 import type { RequestSuggestion } from "@/lib/rules/requestDefaults";
 import { daysInclusive, formatThaiDate, isISODate } from "@/lib/thai/date";
 import { findCenterByCode, saveRequest, type CenterSummary, type RequestFormState } from "@/server/actions/requests";
@@ -18,10 +21,19 @@ export type RequestFormValues = {
   dueDate: string;
 };
 
-import type { ApproverOption } from "@/server/services/approvers";
-
+// ผู้ลงนามเลือกในฟอร์มนี้ที่เดียว (หน้าใบเบิกแสดงอย่างเดียว)
 // approverId = ผู้อนุมัติที่เลือกไว้ (สร้างใหม่: คนที่ผู้จัดทำเลือกครั้งล่าสุด)
-type Props = { approvers: ApproverOption[]; approverId: string } & (
+// requesterId "" = ผู้จัดทำเป็นผู้ขออนุมัติเอง (defaultRequester = ชื่อ/ตำแหน่งที่จะพิมพ์)
+type SignerProps = {
+  approvers: ApproverOption[];
+  approverId: string;
+  requesters: ApproverOption[];
+  requesterId: string;
+  defaultRequester: { id: string; name: string; title: string };
+  texts: MemoTexts; // จาก / เรียน / เพื่อ ของใบนี้ (สร้างใหม่: ตามใบล่าสุดของผู้จัดทำ)
+};
+
+type Props = SignerProps & (
   | { mode: "create"; initialCode?: string }
   | { mode: "edit"; id: string; center: CenterSummary; values: RequestFormValues; existingFileName: string | null }
 );
@@ -44,12 +56,13 @@ export function RequestForm(props: Props) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [approverId, setApproverId] = useState(props.approverId);
   const [suggested, setSuggested] = useState<RequestSuggestion | null>(null);
-  const approver = props.approvers.find((a) => a.id === approverId);
 
-  const update = (key: keyof RequestFormValues) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setValues((v) => ({ ...v, [key]: e.target.value }));
+  const set = (key: keyof RequestFormValues, value: string) => {
+    setValues((v) => ({ ...v, [key]: value }));
     setResultStale(true);
   };
+  const update = (key: keyof RequestFormValues) => (e: React.ChangeEvent<HTMLInputElement>) => set(key, e.target.value);
+  const updateDate = (key: keyof RequestFormValues) => (iso: string) => set(key, iso);
 
   // ส่งเองแทน <form action> เพราะ React จะล้างฟอร์ม (รวมไฟล์ที่เลือก) หลังส่งทุกครั้ง
   // ปุ่มที่กด (ส่งขออนุมัติ / บันทึกไว้ก่อน) จำไว้ใช้ตอนกด "ตรวจแล้ว ยืนยัน" รอบถัดไป
@@ -130,17 +143,17 @@ export function RequestForm(props: Props) {
             <input id="amount" name="amount" inputMode="decimal" value={values.amount} onChange={update("amount")} required placeholder="0.00" className={`${inputClass} tabular-nums`} />
           </Field>
           <Field label="รอบบริการ เริ่ม" htmlFor="periodStart" hint={thaiHint(values.periodStart)}>
-            <input id="periodStart" name="periodStart" type="date" value={values.periodStart} onChange={update("periodStart")} required className={inputClass} />
+            <ThaiDateInput id="periodStart" name="periodStart" value={values.periodStart} onChange={updateDate("periodStart")} required />
           </Field>
           <Field
             label="รอบบริการ สิ้นสุด"
             htmlFor="periodEnd"
             hint={[thaiHint(values.periodEnd), periodDays && `รวม ${periodDays} วัน`].filter(Boolean).join(" · ") || undefined}
           >
-            <input id="periodEnd" name="periodEnd" type="date" value={values.periodEnd} onChange={update("periodEnd")} required className={inputClass} />
+            <ThaiDateInput id="periodEnd" name="periodEnd" value={values.periodEnd} onChange={updateDate("periodEnd")} required />
           </Field>
           <Field label="วันครบกำหนดชำระ" htmlFor="dueDate" hint={thaiHint(values.dueDate) ?? `ศูนย์นี้ครบกำหนดทุกวันที่ ${center.dueDay}`}>
-            <input id="dueDate" name="dueDate" type="date" value={values.dueDate} onChange={update("dueDate")} required className={inputClass} />
+            <ThaiDateInput id="dueDate" name="dueDate" value={values.dueDate} onChange={updateDate("dueDate")} required />
           </Field>
           <Field
             label="ไฟล์ใบแจ้งหนี้"
@@ -175,34 +188,50 @@ export function RequestForm(props: Props) {
           </Field>
 
           <div className="border-t border-slate-100 pt-8 sm:col-span-2">
-            <StepTitle step={3} title="ผู้อนุมัติ" hint="ระบบจำคนที่เลือกครั้งล่าสุดไว้ให้" />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="ชื่อผู้อนุมัติ" htmlFor="approverId">
-                <select
-                  id="approverId"
-                  name="approverId"
-                  value={approverId}
-                  onChange={(e) => {
-                    setApproverId(e.target.value);
-                    setResultStale(true);
-                  }}
-                  className={inputClass}
-                >
-                  <option value="">— เลือกผู้อนุมัติ —</option>
-                  {props.approvers.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <div>
-                <div className="text-sm font-medium text-slate-700">ตำแหน่ง</div>
-                <div className="mt-1.5 flex h-10 items-center rounded-lg bg-slate-100 px-3 text-sm text-slate-800">
-                  {approver?.title || <span className="text-slate-400">–</span>}
+            <StepTitle step={3} title="ผู้ลงนาม" hint="ระบบจำผู้อนุมัติที่เลือกครั้งล่าสุดไว้ให้ · ตำแหน่งเปลี่ยนตามคนที่เลือกเอง" />
+            <div className="flex flex-col gap-4">
+              <SignerSelect
+                name="approverId"
+                label="ผู้อนุมัติ"
+                value={approverId}
+                onChange={(v) => {
+                  setApproverId(v);
+                  setResultStale(true);
+                }}
+                options={props.approvers}
+                empty={{ label: "— เลือกผู้อนุมัติ —", title: "" }}
+              />
+              <SignerSelect
+                name="requesterId"
+                label="ผู้ขออนุมัติ"
+                defaultValue={props.requesterId}
+                options={props.requesters.filter((r) => r.id !== props.defaultRequester.id)}
+                empty={{ label: `ผู้จัดทำ: ${props.defaultRequester.name}`, title: props.defaultRequester.title }}
+              />
+            </div>
+            {/* ข้อความหัวบันทึกของใบนี้ — ปกติเหมือนใบก่อน จึงพับไว้ */}
+            <details className="group mt-5 rounded-lg border border-slate-200">
+              <summary className="flex cursor-pointer list-none items-start gap-3 px-4 py-3 text-sm text-slate-600 hover:bg-slate-50">
+                <span className="min-w-0 flex-1">
+                  <span className="font-medium text-slate-800">ข้อความบนใบเบิก</span> — จาก: {props.texts.department} · เรียน:{" "}
+                  {props.texts.recipient} · เพื่อ: {props.texts.purpose}
+                </span>
+                <span className="shrink-0 font-medium text-emerald-700 group-open:hidden">แก้ไข ▾</span>
+              </summary>
+              <div className="grid gap-4 border-t border-slate-100 p-4 sm:grid-cols-2">
+                <Field label="จาก (ชื่อฝ่าย)" htmlFor="department" hint="ใช้ในย่อหน้า “... ขอเบิกค่าใช้บริการ” ด้วย">
+                  <input id="department" name="department" defaultValue={props.texts.department} maxLength={150} className={inputClass} />
+                </Field>
+                <Field label="เพื่อ" htmlFor="purpose">
+                  <input id="purpose" name="purpose" defaultValue={props.texts.purpose} maxLength={150} className={inputClass} />
+                </Field>
+                <div className="sm:col-span-2">
+                  <Field label="เรียน" htmlFor="recipient" hint="เว้นว่างช่องไหน = ใช้ข้อความตามฟอร์มจริง">
+                    <input id="recipient" name="recipient" defaultValue={props.texts.recipient} maxLength={150} className={inputClass} />
+                  </Field>
                 </div>
               </div>
-            </div>
+            </details>
             {props.approvers.length === 0 && (
               <p className="mt-2 text-xs text-amber-700">ยังไม่มีบัญชีผู้อนุมัติในระบบ — แจ้งผู้ดูแลระบบให้สร้าง (บันทึกไว้ก่อนได้)</p>
             )}
@@ -351,6 +380,59 @@ function CenterCard({ center }: { center: CenterSummary }) {
         <div>ครบกำหนดทุกวันที่ {center.dueDay}</div>
       </dl>
       {center.status !== "ACTIVE" && <p className="mt-2 text-red-700">ศูนย์นี้ไม่ได้อยู่ในสถานะใช้งาน จึงเบิกไม่ได้</p>}
+    </div>
+  );
+}
+
+// ช่องเลือกผู้ลงนาม + ตำแหน่งของคนที่เลือก (แสดงอย่างเดียว — ตำแหน่งแก้ที่บัญชีผู้ใช้)
+function SignerSelect({
+  name,
+  label,
+  value,
+  defaultValue,
+  onChange,
+  options,
+  empty,
+}: {
+  name: string;
+  label: string;
+  value?: string;
+  defaultValue?: string;
+  onChange?: (value: string) => void;
+  options: ApproverOption[];
+  empty: { label: string; title: string };
+}) {
+  const [own, setOwn] = useState(defaultValue ?? "");
+  const current = value ?? own;
+  const title = current ? options.find((o) => o.id === current)?.title : empty.title;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field label={label} htmlFor={name}>
+        <select
+          id={name}
+          name={name}
+          value={current}
+          onChange={(e) => {
+            setOwn(e.target.value);
+            onChange?.(e.target.value);
+          }}
+          className={inputClass}
+        >
+          <option value="">{empty.label}</option>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div>
+        <div className="text-sm font-medium text-slate-700">ตำแหน่ง</div>
+        <div className="mt-1.5 flex h-10 items-center rounded-lg bg-slate-100 px-3 text-sm text-slate-800">
+          {title || <span className="text-slate-400">–</span>}
+        </div>
+      </div>
     </div>
   );
 }

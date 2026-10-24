@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseAmount } from "@/lib/money";
+import { DEFAULT_MEMO_TEXTS } from "@/lib/pdf/memoData";
 import { isSignerRole } from "@/lib/status";
 
 // ตรวจข้อมูลจากฟอร์ม — ใช้ในฝั่งเซิร์ฟเวอร์ (Server Actions) เสมอ ห้ามเชื่อค่าจากเบราว์เซอร์
@@ -123,14 +124,20 @@ export const changePasswordSchema = z
     error: "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม",
   });
 
-// ---------- ตั้งค่าใบเบิก ----------
+// ---------- ข้อความหัวบันทึกของใบเบิก (จาก / เรียน / เพื่อ) ----------
 
-export const reportSettingsSchema = z.object({
-  department: requiredText("ชื่อฝ่าย (จาก)", 100),
-  recipient: requiredText("เรียน", 150),
-  purpose: requiredText("เพื่อ", 100),
-  requesterTitle: requiredText("ตำแหน่งผู้ขออนุมัติ", 100),
-  formCode: requiredText("รหัสฟอร์ม", 100),
+// เว้นว่าง = ใช้ข้อความตามฟอร์มจริง (ช่องพับไว้ในฟอร์ม ผู้ใช้อาจลบทิ้งโดยไม่ตั้งใจ)
+const memoText = (label: string, fallback: string) =>
+  z
+    .string()
+    .trim()
+    .max(150, { error: `${label}ยาวเกิน 150 ตัวอักษร` })
+    .transform((s) => s || fallback);
+
+export const memoTextsSchema = z.object({
+  department: memoText("จาก (ชื่อฝ่าย)", DEFAULT_MEMO_TEXTS.department),
+  recipient: memoText("เรียน", DEFAULT_MEMO_TEXTS.recipient),
+  purpose: memoText("เพื่อ", DEFAULT_MEMO_TEXTS.purpose),
 });
 
 // ---------- ตัวช่วย ----------

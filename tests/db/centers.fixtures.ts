@@ -1,3 +1,4 @@
+import { DEFAULT_MEMO_TEXTS } from "@/lib/pdf/memoData";
 import { db } from "@/server/db";
 import { PREFIX } from "./helpers";
 
@@ -17,6 +18,7 @@ export async function createCenterForTest(code: string, options: { withRequest?:
         periodStart: new Date("2026-09-01"),
         periodEnd: new Date("2026-09-30"),
         dueDate: new Date("2026-10-15"),
+        ...DEFAULT_MEMO_TEXTS,
         createdById: creator.id,
       },
     });

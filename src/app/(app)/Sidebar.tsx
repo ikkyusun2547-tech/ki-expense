@@ -1,6 +1,6 @@
 "use client";
 
-import { Building, Calculator, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Settings, Stamp, Users, Wifi, X } from "lucide-react";
+import { Building, Calculator, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Stamp, Users, Wifi, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -18,7 +18,6 @@ const ICONS: Record<string, IconType> = {
   "/summary": LayoutDashboard,
   "/admin/centers": Building,
   "/admin/users": Users,
-  "/settings": Settings,
 };
 
 export type SidebarUser = { name: string; roleLabel: string; initial: string };

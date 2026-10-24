@@ -1,6 +1,7 @@
 import "server-only";
 import type { Role } from "@/generated/prisma/enums";
 import { toAmountString } from "@/lib/money";
+import { DEFAULT_MEMO_TEXTS, type MemoTexts } from "@/lib/pdf/memoData";
 import { checkPayment, type PaymentInput } from "@/lib/rules/paymentRules";
 import { checkRequest, type Issue, type RequestDraft } from "@/lib/rules/requestRules";
 import { checkSignerChange, checkTransition, isAssignedApprover, type RequestAction } from "@/lib/status";
@@ -81,17 +82,21 @@ async function storeFile(file: File | null): Promise<{ ok: true; saved: SavedFil
   return result.ok ? { ok: true, saved: result.file } : result;
 }
 
-// ผู้อนุมัติที่เลือกในฟอร์มใบเบิก: undefined = ไม่เปลี่ยน, null = ไม่เลือก, id = ต้องเป็นผู้อนุมัติที่ใช้งานอยู่
-type ApproverFields = { approverId: string | null; approverName: string | null; approverTitle: string | null };
+// ผู้ลงนามที่เลือกในฟอร์มใบเบิก: undefined = ไม่เปลี่ยน, null = ค่าเริ่มต้น (ผู้ขอ = ผู้จัดทำ / ผู้อนุมัติ = ยังไม่เลือก),
+// id = บัญชีที่ใช้งานอยู่และบทบาทตรง — เก็บ id + สำเนาชื่อ/ตำแหน่ง
+type Snapshot = { id: string | null; name: string | null; title: string | null };
 
-async function approverFields(approverId: string | null): Promise<ApproverFields | null> {
-  if (!approverId) return { approverId: null, approverName: null, approverTitle: null };
-  const user = await db.user.findUnique({ where: { id: approverId } });
-  if (!user || !user.active || user.role !== "APPROVER") return null;
-  return { approverId: user.id, approverName: user.name, approverTitle: user.title ?? "" };
+async function signerSnapshot(userId: string | null, role: Role): Promise<Snapshot | null> {
+  if (!userId) return { id: null, name: null, title: null };
+  const user = await db.user.findUnique({ where: { id: userId } });
+  if (!user || !user.active || user.role !== role) return null;
+  return { id: user.id, name: user.name, title: user.title ?? "" };
 }
 
-const APPROVER_NOT_FOUND = "ไม่พบผู้อนุมัติที่เลือก (อาจถูกปิดบัญชี) กรุณาเลือกใหม่";
+const approverData = (s: Snapshot) => ({ approverId: s.id, approverName: s.name, approverTitle: s.title });
+const requesterData = (s: Snapshot) => ({ requesterId: s.id, requesterName: s.name, requesterTitle: s.title });
+
+const SIGNER_NOT_FOUND = "ไม่พบผู้ลงนามที่เลือก (อาจถูกปิดบัญชี) กรุณาเลือกใหม่";
 
 export async function createRequest(args: {
   centerId: string;
@@ -99,10 +104,13 @@ export async function createRequest(args: {
   file: File | null;
   confirmWarnings: boolean;
   approverId?: string | null;
+  requesterId?: string | null;
+  texts?: MemoTexts; // จาก / เรียน / เพื่อ (ไม่ส่ง = ข้อความตามฟอร์มจริง)
   actor: CurrentUser;
 }): Promise<SaveOutcome> {
-  const approver = await approverFields(args.approverId ?? null);
-  if (!approver) return { ok: false, blocks: [], warnings: [], error: APPROVER_NOT_FOUND };
+  const approver = await signerSnapshot(args.approverId ?? null, "APPROVER");
+  const requester = await signerSnapshot(args.requesterId ?? null, "CREATOR");
+  if (!approver || !requester) return { ok: false, blocks: [], warnings: [], error: SIGNER_NOT_FOUND };
 
   const check = await validate({ ...args, hasExistingFile: false });
   if (!check.ok) return check;
@@ -118,7 +126,9 @@ export async function createRequest(args: {
           ...toDbFields(args.input),
           invoiceFileKey: stored.saved?.key,
           invoiceFileName: stored.saved?.fileName,
-          ...approver,
+          ...approverData(approver),
+          ...requesterData(requester),
+          ...(args.texts ?? DEFAULT_MEMO_TEXTS),
           createdById: args.actor.id,
         },
       });
@@ -141,6 +151,8 @@ export async function updateRequest(args: {
   file: File | null;
   confirmWarnings: boolean;
   approverId?: string | null;
+  requesterId?: string | null;
+  texts?: MemoTexts; // ไม่ส่ง = ไม่เปลี่ยน
   actor: CurrentUser;
 }): Promise<SaveOutcome> {
   const current = await db.request.findUnique({ where: { id: args.requestId } });
@@ -149,10 +161,13 @@ export async function updateRequest(args: {
   const allowed = checkTransition(args.actor.role, "EDIT", current.status);
   if (!allowed.ok) return { ok: false, blocks: [], warnings: [], error: allowed.reason };
 
-  // เลือกผู้อนุมัติคนเดิม (แม้ถูกปิดบัญชีไปแล้ว) = ไม่เปลี่ยน
-  const approverChanged = args.approverId !== undefined && args.approverId !== current.approverId;
-  const approver = approverChanged ? await approverFields(args.approverId ?? null) : undefined;
-  if (approver === null) return { ok: false, blocks: [], warnings: [], error: APPROVER_NOT_FOUND };
+  // เลือกคนเดิม (แม้ถูกปิดบัญชีไปแล้ว) = ไม่เปลี่ยน
+  const changed = (next: string | null | undefined, now: string | null) => next !== undefined && next !== now;
+  const approver = changed(args.approverId, current.approverId) ? await signerSnapshot(args.approverId ?? null, "APPROVER") : undefined;
+  const requester = changed(args.requesterId, current.requesterId) ? await signerSnapshot(args.requesterId ?? null, "CREATOR") : undefined;
+  if (approver === null || requester === null) return { ok: false, blocks: [], warnings: [], error: SIGNER_NOT_FOUND };
+  const textsChanged =
+    !!args.texts && (["department", "recipient", "purpose"] as const).some((k) => args.texts![k] !== current[k]);
 
   const check = await validate({
     centerId: current.centerId,
@@ -175,13 +190,17 @@ export async function updateRequest(args: {
         data: {
           ...toDbFields(args.input),
           ...(stored.saved && { invoiceFileKey: stored.saved.key, invoiceFileName: stored.saved.fileName }),
-          ...approver,
+          ...(approver && approverData(approver)),
+          ...(requester && requesterData(requester)),
+          ...args.texts,
         },
       });
       if (updated.count === 0) throw new StaleRequestError();
       const notes = [
         stored.saved && "เปลี่ยนไฟล์ใบแจ้งหนี้",
-        approver && `ผู้อนุมัติ: ${approver.approverName ? `${approver.approverName} (${approver.approverTitle})` : "ยังไม่เลือก"}`,
+        textsChanged && "แก้ข้อความ จาก/เรียน/เพื่อ",
+        requester && `ผู้ขออนุมัติ: ${describeSigner(requester, "ผู้จัดทำ")}`,
+        approver && `ผู้อนุมัติ: ${describeSigner(approver, "ยังไม่เลือก")}`,
       ].filter(Boolean);
       await tx.approvalLog.create({
         data: {
