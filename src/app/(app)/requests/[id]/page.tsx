@@ -6,7 +6,7 @@ import { RequestStatusBadge } from "@/components/StatusBadge";
 import { Alert, ButtonAnchor, ButtonLink, Card, CardTitle, cx, PageHeader, type IconType } from "@/components/ui";
 import { formatAmount } from "@/lib/money";
 import { chosenSignersOf, resolveSigners, type ResolvedSigner } from "@/lib/pdf/memoData";
-import { ACTION_LABEL, canPerform, checkSignerChange, isAssignedApprover, STATUS_LABEL } from "@/lib/status";
+import { ACTION_LABEL, canPerform, checkSignerChange, isAssignedApprover, returnedBy, STATUS_LABEL } from "@/lib/status";
 import { bahtText } from "@/lib/thai/bahtText";
 import { daysInclusive, formatThaiDate, formatThaiDateTime, toISODate, todayISO } from "@/lib/thai/date";
 import { requireUser } from "@/server/auth";
@@ -58,6 +58,8 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
   const canChangeSigners = !deleted && checkSignerChange(user.role, request.status).ok;
   const savedSigners = (await searchParams).signers === "1";
   const isMyApproval = !deleted && request.status === "PENDING" && isAssignedApprover(user.id, request);
+  // ถูกตีกลับ → แสดงเหตุผลบนสุด (ไม่ต้องไล่หาในประวัติ)
+  const returned = deleted ? null : returnedBy(request.status, request.logs);
 
   let requesterSlot: SignerSlot | null = null;
   let approverSlot: SignerSlot | null = null;
@@ -99,6 +101,19 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
         </div>
       ) : (
         <Stepper status={request.status} />
+      )}
+
+      {returned && (
+        <div className="mb-6">
+          <Alert tone="error">
+            <p className="flex items-center gap-1.5 font-semibold">
+              <CircleX className="size-4 shrink-0" aria-hidden />
+              {returned.action === "REJECT" ? "ไม่อนุมัติ" : "ถูกย้อนสถานะ"} โดย {returned.actor.name} · {formatThaiDateTime(returned.createdAt)} น.
+            </p>
+            {returned.note && <p className="mt-1 pl-5.5 text-base">เหตุผล: {returned.note}</p>}
+            {can("SUBMIT") && <p className="mt-1 pl-5.5 text-xs">แก้ไขตามเหตุผลแล้วกด “ส่งขออนุมัติ” อีกครั้ง</p>}
+          </Alert>
+        </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">

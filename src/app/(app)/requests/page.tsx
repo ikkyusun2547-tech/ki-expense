@@ -2,6 +2,7 @@ import { CircleCheck, FilePlus, FileText, Hourglass, Inbox, Plus, Receipt, Send 
 import type { RequestStatus } from "@/generated/prisma/enums";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import {
+  Badge,
   Button,
   ButtonLink,
   EmptyRow,
@@ -21,7 +22,7 @@ import {
   type IconType,
 } from "@/components/ui";
 import { formatAmount } from "@/lib/money";
-import { canCreateRequest, STATUS_LABEL } from "@/lib/status";
+import { canCreateRequest, returnedBy, STATUS_LABEL } from "@/lib/status";
 import { formatThaiDate, toISODate } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
@@ -56,7 +57,16 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
         }),
       },
       orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }],
-      include: { center: { select: { name: true, customerCode: true } } },
+      include: {
+        center: { select: { name: true, customerCode: true } },
+        // การกระทำล่าสุดในเส้นทางอนุมัติ — ไว้บอกว่าใบ "สร้างแล้ว" ใบไหนถูกตีกลับ
+        logs: {
+          where: { action: { in: ["SUBMIT", "APPROVE", "REJECT", "REVERT"] } },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { action: true },
+        },
+      },
       take: 200,
     }),
     db.request.groupBy({ by: ["status"], where: { deletedAt: null }, _count: true }),
@@ -143,7 +153,10 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                 <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(r.amount)}</td>
                 <td className={`${tdClass} whitespace-nowrap`}>{formatThaiDate(toISODate(r.dueDate))}</td>
                 <td className={tdClass}>
-                  <RequestStatusBadge status={r.status} />
+                  <div className="flex flex-wrap items-center gap-1">
+                    <RequestStatusBadge status={r.status} />
+                    {returnedBy(r.status, r.logs) && <Badge tone="red">ถูกตีกลับ</Badge>}
+                  </div>
                 </td>
                 <td className={`${tdClass} text-right`}>
                   <RowLink href={`/requests/${r.id}`}>ดู</RowLink>

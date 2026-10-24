@@ -7,6 +7,7 @@ import {
   checkTransition,
   isAssignedApprover,
   isSignerRole,
+  returnedBy,
   type RequestAction,
 } from "@/lib/status";
 
@@ -102,5 +103,24 @@ describe("checkSignerChange", () => {
     ["APPROVER", "CREATED"],
   ] as const)("%s เปลี่ยนไม่ได้เมื่อใบ %s", (role, status) => {
     expect(checkSignerChange(role, status)).toMatchObject({ ok: false, reason: expect.any(String) });
+  });
+});
+
+describe("returnedBy", () => {
+  const log = (action: "CREATE" | "EDIT" | "SUBMIT" | "APPROVE" | "REJECT" | "REVERT", note?: string) => ({ action, note });
+
+  it("ไม่อนุมัติล่าสุด → คืน log นั้น (แม้แก้ไขต่อแล้ว)", () => {
+    const logs = [log("CREATE"), log("SUBMIT"), log("REJECT", "ยอดผิด"), log("EDIT")];
+    expect(returnedBy("CREATED", logs)).toEqual(log("REJECT", "ยอดผิด"));
+  });
+
+  it("admin ย้อนสถานะ → ถือว่าถูกตีกลับเช่นกัน", () => {
+    expect(returnedBy("CREATED", [log("CREATE"), log("SUBMIT"), log("APPROVE"), log("REVERT", "ศูนย์ผิด")])?.note).toBe("ศูนย์ผิด");
+  });
+
+  it("ส่งใหม่แล้ว / ไม่เคยถูกตีกลับ / สถานะอื่น → null", () => {
+    expect(returnedBy("PENDING", [log("SUBMIT"), log("REJECT", "x"), log("SUBMIT")])).toBeNull();
+    expect(returnedBy("CREATED", [log("CREATE"), log("EDIT")])).toBeNull();
+    expect(returnedBy("PENDING", [log("REJECT", "x")])).toBeNull();
   });
 });

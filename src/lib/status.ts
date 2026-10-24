@@ -102,6 +102,16 @@ export function canPerform(role: Role, action: RequestAction, status: RequestSta
   return checkTransition(role, action, status).ok;
 }
 
+// ใบที่ "สร้างแล้ว" เพราะถูกตีกลับ (ผู้อนุมัติไม่อนุมัติ / admin ย้อนสถานะ) → คืน log นั้นไว้แสดงเหตุผลให้ผู้จัดทำเห็น
+// ดูเฉพาะการกระทำที่เปลี่ยนเส้นทางอนุมัติ: ส่งใหม่หรืออนุมัติแล้ว = ไม่ใช่ใบถูกตีกลับอีกต่อไป
+const ROUTE_ACTIONS: readonly LogAction[] = ["SUBMIT", "APPROVE", "REJECT", "REVERT"];
+
+export function returnedBy<T extends { action: LogAction }>(status: RequestStatus, logs: readonly T[]): T | null {
+  if (status !== "CREATED") return null;
+  const last = logs.filter((l) => ROUTE_ACTIONS.includes(l.action)).at(-1);
+  return last && (last.action === "REJECT" || last.action === "REVERT") ? last : null;
+}
+
 // อนุมัติ/ไม่อนุมัติได้เฉพาะผู้อนุมัติที่ผู้จัดทำเลือกไว้ในใบ
 export function isAssignedApprover(userId: string, request: { approverId: string | null }): boolean {
   return request.approverId !== null && request.approverId === userId;
