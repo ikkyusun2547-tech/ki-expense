@@ -6,6 +6,8 @@ import { cookieJar } from "./setup";
 // ข้อมูลทดสอบทุกชิ้นขึ้นต้นด้วย PREFIX เพื่อลบทิ้งได้ครบหลังจบ
 export const PREFIX = "zz-test-";
 export const PASSWORD = "test-password-1";
+// เบอร์โทรศัพท์ทดสอบต้องเป็นตัวเลขล้วน จึงใช้ช่วงเบอร์นี้แทน PREFIX
+export const TEST_PHONE_PREFIX = "0990000";
 
 export async function createTestUser(name: string, role: Role, options: { mustChangePassword?: boolean } = {}) {
   return db.user.create({
@@ -21,8 +23,9 @@ export async function createTestUser(name: string, role: Role, options: { mustCh
 
 export async function cleanup() {
   cookieJar.clear();
-  await db.request.deleteMany({ where: { center: { customerCode: { startsWith: PREFIX } } } });
-  await db.center.deleteMany({ where: { customerCode: { startsWith: PREFIX } } });
+  const testCenters = { OR: [{ customerCode: { startsWith: PREFIX } }, { customerCode: { startsWith: TEST_PHONE_PREFIX } }] };
+  await db.request.deleteMany({ where: { center: testCenters } });
+  await db.center.deleteMany({ where: testCenters });
   await db.loginAttempt.deleteMany({ where: { username: { startsWith: PREFIX } } });
   await db.user.deleteMany({ where: { username: { startsWith: PREFIX } } }); // session ลบตามแบบ cascade
 }

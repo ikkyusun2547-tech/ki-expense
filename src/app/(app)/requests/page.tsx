@@ -21,6 +21,7 @@ import {
   type BadgeTone,
   type IconType,
 } from "@/components/ui";
+import { centerCode } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { canCreateRequest, returnedBy, STATUS_LABEL } from "@/lib/status";
 import { formatThaiDate, toISODate } from "@/lib/thai/date";
@@ -52,13 +53,14 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
           OR: [
             { invoiceNo: { contains: q, mode: "insensitive" } },
             { center: { customerCode: { contains: q, mode: "insensitive" } } },
+            { center: { customerCode: { contains: q.replace(/[\s-]/g, "") || q } } }, // เบอร์โทรที่พิมพ์มีขีด
             { center: { name: { contains: q, mode: "insensitive" } } },
           ],
         }),
       },
       orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }],
       include: {
-        center: { select: { name: true, customerCode: true } },
+        center: { select: { kind: true, name: true, customerCode: true } },
         // การกระทำล่าสุดในเส้นทางอนุมัติ — ไว้บอกว่าใบ "สร้างแล้ว" ใบไหนถูกตีกลับ
         logs: {
           where: { action: { in: ["SUBMIT", "APPROVE", "REJECT", "REVERT"] } },
@@ -144,7 +146,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
             {requests.map((r) => (
               <tr key={r.id} className={rowClass}>
                 <td className={tdClass}>
-                  <NameCell name={r.center.name} code={r.center.customerCode} href={`/requests/${r.id}`} />
+                  <NameCell name={r.center.name} code={centerCode(r.center)} href={`/requests/${r.id}`} />
                 </td>
                 <td className={`${tdClass} whitespace-nowrap`}>
                   {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}

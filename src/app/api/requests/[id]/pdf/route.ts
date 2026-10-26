@@ -11,14 +11,19 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/requests/[i
   const { id } = await ctx.params;
   const request = await db.request.findUnique({
     where: { id },
-    include: { center: { select: { name: true, customerCode: true } }, createdBy: { select: { name: true, title: true } } },
+    include: {
+      center: { select: { kind: true, name: true, customerCode: true, provider: true } },
+      createdBy: { select: { name: true, title: true } },
+    },
   });
   if (!request || request.deletedAt) return new Response("ไม่พบใบเบิกนี้", { status: 404 });
 
   const pdf = await renderInternalMemo(
     buildMemo({
       memoDate: todayISO(request.createdAt), // วันที่สร้างใบเบิก ตามเวลาไทย
+      kind: request.center.kind,
       customerCode: request.center.customerCode,
+      provider: request.center.provider,
       serviceUser: request.center.name,
       amount: request.amount,
       dueDate: toISODate(request.dueDate),

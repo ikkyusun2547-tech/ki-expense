@@ -15,10 +15,10 @@ const SIZE = { base: 11, title: 18, pageNo: 9.5, company: 11.5, table: 10.5, for
 const INDENT = 36;
 
 // ความกว้างคอลัมน์ (pt) — คอลัมน์สุดท้ายของแต่ละแถวยืดเต็มที่เหลือ
-const HEAD = { label: 62, value: 250, rightLabel: 50 }; // หัวบันทึก: ซ้าย = label + value
+const HEAD = { label: 62, value: 222, rightLabel: 50 }; // หัวบันทึก: ซ้าย = label + value (ช่อง "จาก" ด้านขวาต้องพอสำหรับ "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์" ซึ่งตัดบรรทัดไม่ได้)
 const HEAD_LEFT = HEAD.label + HEAD.value;
-const COL = { no: 44, code: 90, user: 134, amount: 80 }; // ตาราง: กำหนดชำระ = ที่เหลือ
-const COL_LEFT = COL.no + COL.code + COL.user;
+const COL = { no: 36, code: 92, provider: 44, user: 112, amount: 68 }; // ตาราง: กำหนดชำระ = ที่เหลือ
+const COL_LEFT = COL.no + COL.code + COL.provider + COL.user;
 
 const styles = StyleSheet.create({
   page: { fontFamily: "Sarabun", fontSize: SIZE.base, lineHeight: 1.55, paddingTop: 40, paddingBottom: 30, paddingHorizontal: 46 },
@@ -62,7 +62,7 @@ export type MemoLogo = { data: Buffer; format: "png" | "jpg" };
 
 export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | null }) {
   return (
-    <Document title={`บันทึกภายใน ${data.subject} ${data.subjectDetail}`} author={data.company} language="th">
+    <Document title={`บันทึกภายใน ${data.subject} ${data.subjectDetail || data.rows[0]?.customerCode}`} author={data.company} language="th">
       <Page size="A4" style={styles.page}>
         {/* ---------- หัวบันทึก ---------- */}
         <View style={styles.header}>
@@ -88,7 +88,7 @@ export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | 
             <T style={[styles.cell, styles.bold, RIGHT, { width: HEAD.label }]}>เรื่อง</T>
             <View style={[styles.cell, RIGHT, { width: HEAD.value }]}>
               <T>{data.subject}</T>
-              <T>{data.subjectDetail}</T>
+              {data.subjectDetail ? <T>{data.subjectDetail}</T> : null}
             </View>
             <T style={[styles.cell, styles.bold, RIGHT, { width: HEAD.rightLabel }]}>จาก</T>
             <T style={[styles.cell, styles.grow]}>{data.from}</T>
@@ -106,13 +106,14 @@ export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | 
           <T style={styles.intro}>{data.intro}</T>
 
           <View style={styles.table}>
-            {/* หัวตาราง 2 ชั้น: [ชื่อตาราง / ลำดับ รหัสลูกค้า ผู้ใช้บริการ] [จำนวน] [เดือน / กำหนดชำระ] */}
+            {/* หัวตาราง 2 ชั้น: [ชื่อตาราง / ลำดับ รหัสลูกค้า|หมายเลขโทรศัพท์ ระบบ ผู้ใช้บริการ] [จำนวน] [เดือน / กำหนดชำระ] */}
             <View style={styles.row}>
               <View style={{ width: COL_LEFT }}>
                 <T style={[styles.tCell, styles.bold, RIGHT, { borderBottomWidth: 1 }]}>{data.tableTitle}</T>
                 <View style={styles.row}>
                   <T style={[styles.tCell, styles.bold, RIGHT, { width: COL.no }]}>ลำดับ</T>
-                  <T style={[styles.tCell, styles.bold, RIGHT, { width: COL.code }]}>รหัสลูกค้า</T>
+                  <T style={[styles.tCell, styles.bold, RIGHT, { width: COL.code }]}>{data.codeHeader}</T>
+                  <T style={[styles.tCell, styles.bold, RIGHT, { width: COL.provider }]}>ระบบ</T>
                   <T style={[styles.tCell, styles.bold, RIGHT, { width: COL.user }]}>ผู้ใช้บริการ</T>
                 </View>
               </View>
@@ -129,6 +130,7 @@ export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | 
               <View key={r.no} style={styles.rowLine}>
                 <T style={[styles.tCell, RIGHT, { width: COL.no }]}>{String(r.no)}</T>
                 <T style={[styles.tCell, RIGHT, { width: COL.code }]}>{r.customerCode}</T>
+                <T style={[styles.tCell, RIGHT, { width: COL.provider }]}>{r.provider}</T>
                 <T style={[styles.tCell, RIGHT, { width: COL.user }]}>{r.serviceUser}</T>
                 <T style={[styles.tCell, RIGHT, { width: COL.amount }]}>{r.amount}</T>
                 <T style={[styles.tCell, styles.grow]}>{r.dueDate}</T>

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildMemo, chosenSignersOf, DEFAULT_MEMO_TEXTS, resolveSigners } from "@/lib/pdf/memoData";
+import {
+  buildMemo,
+  chosenSignersOf,
+  DEFAULT_MEMO_TEXTS,
+  DEFAULT_MEMO_TEXTS_BY_KIND,
+  fillMemoTexts,
+  resolveSigners,
+} from "@/lib/pdf/memoData";
 
 // ตัวอย่างจากฟอร์มจริง: บันทึกภายใน 16 ต.ค. 2569 ห้องรับรองคุณมั่นคง 749.00 ครบกำหนด 12/11/2569
 const texts = { ...DEFAULT_MEMO_TEXTS, department: "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์" };
@@ -36,9 +43,11 @@ describe("buildMemo", () => {
     expect(memo.tableTitle).toBe("ตารางค่าใช้จ่ายอินเตอร์เน็ตของบริษัทฯ 2569");
     expect(memo.monthHeader).toBe("พฤศจิกายน");
     expect(memo.rows).toEqual([
-      { no: 1, customerCode: "600197730", serviceUser: "ห้องรับรองคุณมั่นคง", amount: "749.00", dueDate: "12/11/2569" },
+      { no: 1, customerCode: "600197730", provider: "3BB", serviceUser: "ห้องรับรองคุณมั่นคง", amount: "749.00", dueDate: "12/11/2569" },
     ]);
+    expect(memo.codeHeader).toBe("รหัสลูกค้า");
     expect(memo.total).toBe("749.00");
+    expect(memo.closing).toBe("จึงเรียนมาเพื่อโปรดพิจารณา");
   });
 
   it("ย่อหน้าหลักตรงกับฟอร์มจริง", () => {
@@ -69,6 +78,57 @@ describe("buildMemo", () => {
     const m = buildMemo({ ...base, memoDate: "2026-12-20", amount: "1068.93", dueDate: "2027-01-05" });
     expect(m.tableTitle).toBe("ตารางค่าใช้จ่ายอินเตอร์เน็ตของบริษัทฯ 2570");
     expect(m.bodyBold).toBe("เดือน มกราคม 2570 เป็นจำนวนเงินทั้งสิ้น 1,068.93 บาท (หนึ่งพันหกสิบแปดบาทเก้าสิบสามสตางค์)");
+  });
+});
+
+// ตัวอย่างจากฟอร์มจริงค่าโทรศัพท์: บันทึกภายใน 19 ต.ค. 2569 เบอร์ 097-3378822 TRUE รัฐกิจสัมพันธ์ 408.40 ครบกำหนด 09/11/2569
+describe("buildMemo ค่าโทรศัพท์", () => {
+  const phone = buildMemo({
+    ...base,
+    kind: "PHONE",
+    memoDate: "2026-10-19",
+    customerCode: "0973378822",
+    provider: "TRUE",
+    serviceUser: "รัฐกิจสัมพันธ์",
+    amount: "408.40",
+    dueDate: "2026-11-09",
+    texts: DEFAULT_MEMO_TEXTS_BY_KIND.PHONE,
+  });
+
+  it("หัวบันทึก: เรื่องค่าโทรศัพท์ ไม่มีบรรทัดชื่อศูนย์, เพื่อ = โปรดพิจารณาดำเนินการ", () => {
+    expect(phone).toMatchObject({
+      date: "19 ตุลาคม 2569",
+      subject: "ขอเบิกค่าใช้บริการโทรศัพท์",
+      subjectDetail: "",
+      from: "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์",
+      to: "ผู้จัดการฝ่ายบัญชี - ผู้จัดการฝ่ายการเงิน",
+      purpose: "โปรดพิจารณาดำเนินการ",
+    });
+  });
+
+  it("ตาราง: หมายเลขโทรศัพท์แบบมีขีด + ระบบ", () => {
+    expect(phone.tableTitle).toBe("ตารางค่าใช้จ่ายโทรศัพท์เคลื่อนที่ของบริษัทฯ 2569");
+    expect(phone.codeHeader).toBe("หมายเลขโทรศัพท์");
+    expect(phone.rows).toEqual([
+      { no: 1, customerCode: "097-3378822", provider: "TRUE", serviceUser: "รัฐกิจสัมพันธ์", amount: "408.40", dueDate: "09/11/2569" },
+    ]);
+  });
+
+  it("ย่อหน้าหลักและคำปิดตรงกับฟอร์มจริง", () => {
+    expect(phone.bodyLead + phone.bodyBold + phone.bodyTail).toBe(
+      "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์ ขอเบิกค่าใช้บริการโทรศัพท์ จำนวน 1 เลขหมาย รอบค่าใช้บริการ " +
+        "เดือน พฤศจิกายน 2569 เป็นจำนวนเงินทั้งสิ้น 408.40 บาท (สี่ร้อยแปดบาทสี่สิบสตางค์) ตามเอกสารที่แนบมาพร้อมนี้",
+    );
+    expect(phone.closing).toBe("จึงเรียนมาเพื่อโปรดพิจารณาดำเนินการ");
+  });
+
+  it("fillMemoTexts: ช่องว่างใช้ข้อความตามฟอร์มของประเภทนั้น", () => {
+    expect(fillMemoTexts({ department: "", recipient: "ผู้จัดการ", purpose: "" }, "PHONE")).toEqual({
+      department: "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์",
+      recipient: "ผู้จัดการ",
+      purpose: "โปรดพิจารณาดำเนินการ",
+    });
+    expect(fillMemoTexts({ department: "", recipient: "", purpose: "" }, "INTERNET")).toEqual(DEFAULT_MEMO_TEXTS);
   });
 });
 

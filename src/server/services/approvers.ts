@@ -1,6 +1,6 @@
 import "server-only";
-import type { Role } from "@/generated/prisma/enums";
-import { DEFAULT_MEMO_TEXTS, type MemoTexts } from "@/lib/pdf/memoData";
+import type { Role, ServiceKind } from "@/generated/prisma/enums";
+import { DEFAULT_MEMO_TEXTS_BY_KIND, type MemoTexts } from "@/lib/pdf/memoData";
 import { db } from "@/server/db";
 
 export type ApproverOption = { id: string; name: string; title: string };
@@ -30,18 +30,21 @@ export async function lastApproverId(creatorId: string, options: ApproverOption[
   return options.length === 1 ? options[0].id : "";
 }
 
-// จาก / เรียน / เพื่อ ของใบล่าสุดที่ผู้จัดทำคนนี้สร้าง (ยังไม่เคยสร้าง = ข้อความตามฟอร์มจริง)
-async function lastMemoTexts(creatorId: string): Promise<MemoTexts> {
+// จาก / เรียน / เพื่อ ของใบล่าสุดประเภทนี้ที่ผู้จัดทำคนนี้สร้าง (ยังไม่เคยสร้าง = ข้อความตามฟอร์มจริงของประเภทนั้น)
+async function lastMemoTexts(creatorId: string, kind: ServiceKind): Promise<MemoTexts> {
   const last = await db.request.findFirst({
-    where: { createdById: creatorId },
+    where: { createdById: creatorId, center: { kind } },
     orderBy: { createdAt: "desc" },
     select: { department: true, recipient: true, purpose: true },
   });
-  return last ?? DEFAULT_MEMO_TEXTS;
+  return last ?? DEFAULT_MEMO_TEXTS_BY_KIND[kind];
 }
+
+export type MemoTextsByKind = Record<ServiceKind, MemoTexts>;
 
 // ค่าช่องผู้ลงนาม + ข้อความหัวบันทึกของฟอร์มใบเบิก
 // (สร้าง: ผู้จัดทำ = ผู้ใช้ปัจจุบัน, ผู้อนุมัติ/ข้อความตามใบล่าสุด / แก้ไข: ตามที่ใบนี้เลือกไว้)
+// texts แยกตามประเภท เพราะตอนเปิดฟอร์มสร้างยังไม่รู้ว่าจะเป็นศูนย์หรือเบอร์ (แก้ไข: ทั้งสองค่า = ข้อความของใบนี้)
 export async function signerFormProps(
   creator: { id: string; name: string; title: string | null },
   current?: {
@@ -62,6 +65,15 @@ export async function signerFormProps(
     requesters,
     requesterId: current?.requesterId ?? "",
     defaultRequester: { id: creator.id, name: creator.name, title: creator.title ?? "" },
-    texts: current ? { department: current.department, recipient: current.recipient, purpose: current.purpose } : await lastMemoTexts(creator.id),
+    texts: await memoTextsByKind(creator.id, current),
   };
+}
+
+async function memoTextsByKind(creatorId: string, current?: MemoTexts): Promise<MemoTextsByKind> {
+  if (current) {
+    const own = { department: current.department, recipient: current.recipient, purpose: current.purpose };
+    return { INTERNET: own, PHONE: own };
+  }
+  const [INTERNET, PHONE] = await Promise.all([lastMemoTexts(creatorId, "INTERNET"), lastMemoTexts(creatorId, "PHONE")]);
+  return { INTERNET, PHONE };
 }

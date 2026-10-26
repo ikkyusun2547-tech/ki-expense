@@ -1,6 +1,6 @@
-import type { CenterStatus } from "@/generated/prisma/enums";
+import type { CenterStatus, ServiceKind } from "@/generated/prisma/enums";
 import { formatAmount, parseAmount, toSatang } from "@/lib/money";
-import { CENTER_STATUS_LABEL } from "@/lib/status";
+import { centerStatusLabel } from "@/lib/status";
 import { daysInclusive, formatThaiDate, isISODate, periodsOverlap, type ISODate } from "@/lib/thai/date";
 
 // กฎตรวจใบเบิกก่อนสร้าง/แก้ไข — pure function ไม่แตะ DB
@@ -21,6 +21,7 @@ export type RequestDraft = {
 export type CenterForRules = {
   status: CenterStatus;
   normalAmount: string;
+  kind?: ServiceKind; // ใช้เลือกคำในข้อความ (ศูนย์ / เบอร์) — ไม่ส่ง = ศูนย์
 };
 
 // ใบเบิกเดิมของศูนย์เดียวกันที่ยังไม่ถูกลบ (ตอนแก้ไข ผู้เรียกต้องตัดใบที่กำลังแก้ออกเอง)
@@ -62,10 +63,12 @@ export function checkRequest(
   const blocks: Issue[] = [];
   const warnings: Issue[] = [];
 
+  const noun = center.kind === "PHONE" ? "เบอร์" : "ศูนย์";
+
   if (center.status !== "ACTIVE") {
     blocks.push({
       code: "CENTER_INACTIVE",
-      message: `ศูนย์สถานะ "${CENTER_STATUS_LABEL[center.status]}" เบิกไม่ได้`,
+      message: `${noun}สถานะ "${centerStatusLabel(center.status, center.kind)}" เบิกไม่ได้`,
     });
   }
 
@@ -106,7 +109,7 @@ export function checkRequest(
     if (clash) {
       blocks.push({
         code: "PERIOD_OVERLAP",
-        message: `ศูนย์นี้มีใบเบิกรอบ ${formatThaiDate(clash.periodStart)} – ${formatThaiDate(clash.periodEnd)} อยู่แล้ว (รอบบริการทับกัน)`,
+        message: `${noun}นี้มีใบเบิกรอบ ${formatThaiDate(clash.periodStart)} – ${formatThaiDate(clash.periodEnd)} อยู่แล้ว (รอบบริการทับกัน)`,
       });
     }
 

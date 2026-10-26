@@ -27,7 +27,7 @@ export default async function EditRequestPage({ params }: PageProps<"/requests/[
       <PageHeader
         icon={Pencil}
         title="แก้ไขใบเบิก"
-        description="เปลี่ยนศูนย์ไม่ได้ — ถ้าเลือกศูนย์ผิดให้ลบแล้วสร้างใหม่"
+        description="เปลี่ยนศูนย์/เบอร์ไม่ได้ — ถ้าเลือกผิดให้ลบแล้วสร้างใหม่"
       />
       <Card className="max-w-3xl">
         <RequestForm
@@ -37,7 +37,9 @@ export default async function EditRequestPage({ params }: PageProps<"/requests/[
           {...signers}
           center={{
             id: center.id,
+            kind: center.kind,
             customerCode: center.customerCode,
+            provider: center.provider,
             serviceNumber: center.serviceNumber,
             name: center.name,
             normalAmount: center.normalAmount.toFixed(2),

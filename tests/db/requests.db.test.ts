@@ -26,7 +26,7 @@ describe("ค้นหาศูนย์จากรหัสลูกค้า"
       ok: true,
       center: { id: c.id, name: c.name, normalAmount: "749.00", status: "ACTIVE" },
     });
-    expect(await findCenterByCode("ไม่มีรหัสนี้")).toEqual({ ok: false, error: "ไม่พบรหัสลูกค้า ไม่มีรหัสนี้ ในทะเบียนศูนย์" });
+    expect(await findCenterByCode("ไม่มีรหัสนี้")).toEqual({ ok: false, error: "ไม่พบ ไม่มีรหัสนี้ ในทะเบียนศูนย์หรือทะเบียนเบอร์โทรศัพท์" });
   });
 
   it("ฝ่ายบัญชีเรียกไม่ได้", async () => {

@@ -43,6 +43,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
   const [centers, counts] = await Promise.all([
     db.center.findMany({
       where: {
+        kind: "INTERNET",
         ...(status && { status }),
         ...(q && {
           OR: [
@@ -55,7 +56,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
       orderBy: { customerCode: "asc" },
       include: { _count: { select: { requests: true } } },
     }),
-    db.center.groupBy({ by: ["status"], _count: true }),
+    db.center.groupBy({ by: ["status"], where: { kind: "INTERNET" }, _count: true }),
   ]);
 
   const total = counts.reduce((sum, c) => sum + c._count, 0);
@@ -147,7 +148,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
             ))}
             {centers.length === 0 && (
               <EmptyRow colSpan={7} icon={Inbox}>
-                {q || status ? "ไม่พบศูนย์ที่ตรงกับการค้นหา" : "ยังไม่มีศูนย์ในทะเบียน — กด \"เพิ่มศูนย์\" เพื่อเริ่ม"}
+                {q || status ? "ไม่พบศูนย์ที่ตรงกับการค้นหา" : 'ยังไม่มีศูนย์ในทะเบียน — กด "เพิ่มศูนย์" เพื่อเริ่ม'}
               </EmptyRow>
             )}
           </tbody>

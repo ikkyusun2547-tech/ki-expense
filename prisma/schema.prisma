@@ -20,8 +20,14 @@ enum Role {
 
 enum CenterStatus {
   ACTIVE // ใช้งาน
-  MOVED // ย้าย
-  CLOSED // ปิด
+  MOVED // ย้าย (เฉพาะศูนย์)
+  CLOSED // ปิด / เบอร์โทรศัพท์ = ยกเลิก
+}
+
+// ประเภทค่าใช้จ่ายของรายการในทะเบียน
+enum ServiceKind {
+  INTERNET // ค่าอินเทอร์เน็ต — ทะเบียนศูนย์
+  PHONE // ค่าโทรศัพท์ — ทะเบียนเบอร์โทรศัพท์
 }
 
 enum RequestStatus {
@@ -88,11 +94,14 @@ model LoginAttempt {
   @@index([username, createdAt])
 }
 
+// ทะเบียนรายการที่เบิกได้ (ชื่อตารางเดิม = ศูนย์ เพราะเริ่มจากค่าอินเทอร์เน็ต) — ความหมายของช่องขึ้นกับ kind
 model Center {
   id            String       @id @default(cuid())
-  customerCode  String       @unique // รหัสลูกค้า 3BB ใช้ค้นหา
-  serviceNumber String? // หมายเลขบริการ (ข้อมูลประกอบ)
-  name          String
+  kind          ServiceKind  @default(INTERNET)
+  customerCode  String       @unique // รหัสค้นหา: อินเทอร์เน็ต = รหัสลูกค้า 3BB, โทรศัพท์ = หมายเลขโทรศัพท์ (ตัวเลขล้วน)
+  serviceNumber String? // ข้อมูลประกอบ: อินเทอร์เน็ต = หมายเลขบริการ, โทรศัพท์ = รหัสลูกค้าของค่าย
+  provider      String       @default("") // ระบบ/ค่าย เช่น TRUE (โทรศัพท์)
+  name          String // อินเทอร์เน็ต = ชื่อศูนย์, โทรศัพท์ = ผู้ใช้บริการ (ฝ่าย)
   normalAmount  Decimal      @db.Decimal(12, 2) // ยอดปกติต่อเดือน
   dueDay        Int // วันครบกำหนดประจำเดือน 1-31
   status        CenterStatus @default(ACTIVE)

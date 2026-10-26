@@ -10,8 +10,8 @@ export default async function EditCenterPage({ params }: PageProps<"/admin/cente
   await requireRole("ADMIN");
 
   const { id } = await params;
-  const center = await db.center.findUnique({
-    where: { id },
+  const center = await db.center.findFirst({
+    where: { id, kind: "INTERNET" },
     include: { _count: { select: { requests: true } } },
   });
   if (!center) notFound();

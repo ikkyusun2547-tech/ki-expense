@@ -1,3 +1,4 @@
+import { centerCode } from "@/lib/centers/phone";
 import { paymentsCsv } from "@/lib/reports/paymentsCsv";
 import { fromISODate, toISODate, todayISO } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
       paidDate: { gte: fromISODate(`${month}-01`), lt: new Date(Date.UTC(y, m, 1)) },
     },
     orderBy: [{ paidDate: "asc" }, { createdAt: "asc" }],
-    include: { center: { select: { name: true, customerCode: true } } },
+    include: { center: { select: { kind: true, name: true, customerCode: true } } },
   });
 
   const csv = paymentsCsv(
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     rows.map((r) => ({
       paidDate: toISODate(r.paidDate!),
       centerName: r.center.name,
-      customerCode: r.center.customerCode,
+      customerCode: centerCode(r.center),
       invoiceNo: r.invoiceNo,
       periodStart: toISODate(r.periodStart),
       periodEnd: toISODate(r.periodEnd),

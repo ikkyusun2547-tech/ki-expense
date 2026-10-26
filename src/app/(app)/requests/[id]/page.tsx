@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { LogAction, RequestStatus } from "@/generated/prisma/enums";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import { Alert, ButtonAnchor, ButtonLink, Card, CardTitle, cx, PageHeader, type IconType } from "@/components/ui";
+import { centerCode } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { chosenSignersOf, resolveSigners, type ResolvedSigner } from "@/lib/pdf/memoData";
 import { ACTION_LABEL, canPerform, isAssignedApprover, returnedBy, STATUS_LABEL } from "@/lib/status";
@@ -55,13 +56,14 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
   const isMyApproval = !deleted && request.status === "PENDING" && isAssignedApprover(user.id, request);
   // ถูกตีกลับ → แสดงเหตุผลบนสุด (ไม่ต้องไล่หาในประวัติ)
   const returned = deleted ? null : returnedBy(request.status, request.logs);
+  const phone = request.center.kind === "PHONE";
 
   return (
     <>
       <PageHeader
         icon={Receipt}
         title={`ใบเบิก ${request.center.name}`}
-        description={`รอบบริการ ${formatThaiDate(periodStart)} – ${formatThaiDate(periodEnd)} · รหัสลูกค้า ${request.center.customerCode}`}
+        description={`รอบบริการ ${formatThaiDate(periodStart)} – ${formatThaiDate(periodEnd)} · ${phone ? "เบอร์" : "รหัสลูกค้า"} ${centerCode(request.center)}`}
         actions={
           <ButtonLink href={backHref} variant="secondary" icon={ArrowLeft}>
             กลับ
@@ -104,8 +106,19 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
               <RequestStatusBadge status={request.status} />
             </div>
             <dl className="grid gap-x-6 gap-y-4 px-6 py-5 text-sm sm:grid-cols-2">
-              <Item label="ศูนย์">
-                {request.center.name} <span className="text-slate-400">({request.center.customerCode})</span>
+              <Item label={phone ? "เบอร์โทรศัพท์" : "ศูนย์"}>
+                {phone ? (
+                  <>
+                    <span className="tabular-nums">{centerCode(request.center)}</span>{" "}
+                    <span className="text-slate-400">
+                      ({request.center.provider} · {request.center.name})
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {request.center.name} <span className="text-slate-400">({request.center.customerCode})</span>
+                  </>
+                )}
               </Item>
               <Item label="เลขที่ใบแจ้งหนี้">
                 <span className="tabular-nums">{request.invoiceNo}</span>

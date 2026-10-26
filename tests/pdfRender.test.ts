@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { buildMemo, DEFAULT_MEMO_TEXTS } from "@/lib/pdf/memoData";
+import { buildMemo, DEFAULT_MEMO_TEXTS, DEFAULT_MEMO_TEXTS_BY_KIND } from "@/lib/pdf/memoData";
 
 vi.mock("server-only", () => ({}));
 const { renderInternalMemo } = await import("@/server/pdf");
@@ -28,5 +28,25 @@ describe("renderInternalMemo", () => {
     expect(raw.match(/\/Type\s*\/Page\b/g)).toHaveLength(1);
     expect(raw).toMatch(/\/FontFile2/); // ฟอนต์ TrueType ถูกฝังในไฟล์
     expect(raw).toMatch(/Sarabun/);
+  });
+
+  // ตั้ง PDF_SAMPLE_PHONE=<path> เพื่อเก็บใบเบิกค่าโทรศัพท์ไว้เทียบกับฟอร์มจริง
+  it("ใบเบิกค่าโทรศัพท์ หน้าเดียว", async () => {
+    const pdf = await renderInternalMemo(
+      buildMemo({
+        kind: "PHONE",
+        memoDate: "2026-10-19",
+        customerCode: "0973378822",
+        provider: "TRUE",
+        serviceUser: "รัฐกิจสัมพันธ์",
+        amount: "408.40",
+        dueDate: "2026-11-09",
+        creator: { name: "นางสาวทดสอบ จัดทำ", title: "เจ้าหน้าที่รัฐกิจสัมพันธ์" },
+        signers: { requester: null, approver: { name: "นายตัวอย่าง อนุมัติ", title: "รักษาการผู้จัดการส่วนรัฐกิจและหลักทรัพย์" } },
+        texts: DEFAULT_MEMO_TEXTS_BY_KIND.PHONE,
+      }),
+    );
+    if (process.env.PDF_SAMPLE_PHONE) writeFileSync(process.env.PDF_SAMPLE_PHONE, pdf);
+    expect(pdf.toString("latin1").match(/\/Type\s*\/Page\b/g)).toHaveLength(1);
   });
 });

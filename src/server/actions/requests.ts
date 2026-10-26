@@ -1,7 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import type { CenterStatus } from "@/generated/prisma/enums";
+import type { CenterStatus, ServiceKind } from "@/generated/prisma/enums";
+import { normalizePhone } from "@/lib/centers/phone";
 import type { FormState } from "@/lib/formState";
 import { suggestRequest, type RequestSuggestion } from "@/lib/rules/requestDefaults";
 import type { Issue } from "@/lib/rules/requestRules";
@@ -13,7 +14,9 @@ import { createRequest, setRequestSigners, transitionRequest, updateRequest, typ
 
 export type CenterSummary = {
   id: string;
+  kind: ServiceKind;
   customerCode: string;
+  provider: string;
   serviceNumber: string | null;
   name: string;
   normalAmount: string;
@@ -23,15 +26,19 @@ export type CenterSummary = {
 
 export type CenterLookup = { ok: true; center: CenterSummary; suggestion: RequestSuggestion } | { ok: false; error: string };
 
-// ผู้จัดทำพิมพ์รหัสลูกค้า → แสดงศูนย์ + ยอดปกติ
+// ผู้จัดทำพิมพ์รหัสลูกค้า 3BB หรือเบอร์โทรศัพท์ (ช่องเดียว) → แสดงศูนย์/เบอร์ + ยอดปกติ — ประเภทใบเบิกตามที่เจอ
+// ตรงตัวก่อน (รหัสลูกค้า / เบอร์ที่พิมพ์เป็นตัวเลขล้วน) ไม่เจอค่อยลองอ่านเป็นเบอร์ (097-3378822, +66…)
 export async function findCenterByCode(code: string): Promise<CenterLookup> {
   await requireRole("CREATOR");
 
   const customerCode = code.trim();
-  if (!customerCode) return { ok: false, error: "กรอกรหัสลูกค้า" };
+  if (!customerCode) return { ok: false, error: "กรอกรหัสลูกค้าหรือเบอร์โทรศัพท์" };
 
-  const center = await db.center.findUnique({ where: { customerCode } });
-  if (!center) return { ok: false, error: `ไม่พบรหัสลูกค้า ${customerCode} ในทะเบียนศูนย์` };
+  const phone = normalizePhone(customerCode);
+  const center =
+    (await db.center.findUnique({ where: { customerCode } })) ??
+    (phone ? await db.center.findFirst({ where: { customerCode: phone, kind: "PHONE" } }) : null);
+  if (!center) return { ok: false, error: `ไม่พบ ${customerCode} ในทะเบียนศูนย์หรือทะเบียนเบอร์โทรศัพท์` };
 
   // กรอกให้ล่วงหน้าจากใบล่าสุดของศูนย์นี้ (รอบถัดไป)
   const last = await db.request.findFirst({
@@ -50,7 +57,9 @@ export async function findCenterByCode(code: string): Promise<CenterLookup> {
     suggestion,
     center: {
       id: center.id,
+      kind: center.kind,
       customerCode: center.customerCode,
+      provider: center.provider,
       serviceNumber: center.serviceNumber,
       name: center.name,
       normalAmount: center.normalAmount.toFixed(2),

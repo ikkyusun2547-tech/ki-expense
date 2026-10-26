@@ -16,6 +16,7 @@ import {
   tdClass,
   thClass,
 } from "@/components/ui";
+import { centerCode } from "@/lib/centers/phone";
 import { formatAmount, toSatang } from "@/lib/money";
 import { daysUntil } from "@/lib/rules/centerSummary";
 import { beYear, formatThaiDate, thaiMonthName, toISODate, todayISO } from "@/lib/thai/date";
@@ -42,7 +43,7 @@ export default async function AccountingPage({ searchParams }: PageProps<"/accou
   const pending = await db.request.findMany({
     where: { status: "APPROVED", deletedAt: null },
     orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
-    include: { center: { select: { name: true, customerCode: true } } },
+    include: { center: { select: { kind: true, name: true, customerCode: true } } },
   });
   const totalSatang = pending.reduce((sum, r) => sum + toSatang(r.amount), BigInt(0));
   const overdue = pending.filter((r) => daysUntil(today, toISODate(r.dueDate)) < 0).length;
@@ -115,7 +116,7 @@ export default async function AccountingPage({ searchParams }: PageProps<"/accou
 }
 
 type PendingRow = Awaited<
-  ReturnType<typeof db.request.findMany<{ include: { center: { select: { name: true; customerCode: true } } } }>>
+  ReturnType<typeof db.request.findMany<{ include: { center: { select: { kind: true; name: true; customerCode: true } } } }>>
 >[number];
 
 function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: string; canPay: boolean }) {
@@ -136,7 +137,7 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                       <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
                     </span>
                   )}
-                  <NameCell name={r.center.name} code={r.center.customerCode} href={`/requests/${r.id}`} />
+                  <NameCell name={r.center.name} code={centerCode(r.center)} href={`/requests/${r.id}`} />
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-bold tabular-nums text-slate-900">{formatAmount(r.amount)}</div>
@@ -192,7 +193,7 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                       </div>
                     </td>
                     <td className={tdClass}>
-                      <NameCell name={r.center.name} code={r.center.customerCode} href={`/requests/${r.id}`} />
+                      <NameCell name={r.center.name} code={centerCode(r.center)} href={`/requests/${r.id}`} />
                       {/* รอบบริการ + เลขที่ใบแจ้งหนี้ + ไฟล์ อยู่ใต้ชื่อศูนย์ เพื่อเหลือที่ให้ช่องบันทึกจ่ายในแถว */}
                       <div className="mt-1 whitespace-nowrap text-xs text-slate-500">
                         {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
@@ -252,7 +253,7 @@ async function PaidTable({ today }: { today: string }) {
   const requests = await db.request.findMany({
     where: { status: "PAID", deletedAt: null },
     orderBy: [{ paidDate: "desc" }, { updatedAt: "desc" }],
-    include: { center: { select: { name: true, customerCode: true } } },
+    include: { center: { select: { kind: true, name: true, customerCode: true } } },
     take: 100,
   });
 
@@ -287,7 +288,7 @@ async function PaidTable({ today }: { today: string }) {
               <tr key={r.id} className={rowClass}>
                 <td className={`${tdClass} whitespace-nowrap`}>{r.paidDate && formatThaiDate(toISODate(r.paidDate))}</td>
                 <td className={tdClass}>
-                  <NameCell name={r.center.name} code={r.center.customerCode} href={`/requests/${r.id}`} />
+                  <NameCell name={r.center.name} code={centerCode(r.center)} href={`/requests/${r.id}`} />
                 </td>
                 <td className={`${tdClass} whitespace-nowrap`}>
                   {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}

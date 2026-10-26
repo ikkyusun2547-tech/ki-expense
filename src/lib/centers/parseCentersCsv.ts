@@ -45,38 +45,40 @@ const STATUS_MAP: Record<string, CenterStatus> = {
 
 const normalizeHeader = (h: string) => h.replace(/\s+/g, "").toLowerCase();
 
-function mapHeaders(headers: string[]): { index: Partial<Record<Field, number>>; errors: string[] } {
-  const index: Partial<Record<Field, number>> = {};
-  const normalized = headers.map(normalizeHeader);
-
-  for (const field of Object.keys(HEADER_ALIASES) as Field[]) {
-    const aliases = HEADER_ALIASES[field].map(normalizeHeader);
-    const found = normalized.findIndex((h) => aliases.includes(h));
-    if (found >= 0) index[field] = found;
-  }
-
-  const errors = REQUIRED.filter((f) => index[f] === undefined).map(
-    (f) => `ไม่พบคอลัมน์ "${HEADER_ALIASES[f][0]}" (หัวคอลัมน์ที่พบ: ${headers.join(", ")})`,
-  );
-  return { index, errors };
-}
-
-export function parseCentersCsv(text: string): ParseResult {
+// อ่าน CSV + จับคู่หัวคอลัมน์กับชื่อที่ยอมรับ — ใช้ร่วมกับทะเบียนเบอร์โทรศัพท์ (phoneCsv.ts)
+export function readCsvTable<F extends string>(
+  text: string,
+  aliases: Record<F, string[]>,
+  required: F[],
+): { data: string[][]; cell: (record: string[], field: F) => string; errors: string[] } {
   const records: string[][] = parse(text.replace(/^﻿/, ""), {
     skip_empty_lines: true,
     trim: true,
     relax_column_count: true,
   });
-  if (records.length === 0) return { rows: [], errors: ["ไฟล์ว่าง"] };
-
-  const [headers, ...data] = records;
-  const { index, errors } = mapHeaders(headers);
-  if (errors.length) return { rows: [], errors };
-
-  const cell = (record: string[], field: Field) => {
+  const index: Partial<Record<F, number>> = {};
+  const cell = (record: string[], field: F) => {
     const i = index[field];
     return i === undefined ? "" : (record[i] ?? "").trim();
   };
+  if (records.length === 0) return { data: [], cell, errors: ["ไฟล์ว่าง"] };
+
+  const [headers, ...data] = records;
+  const normalized = headers.map(normalizeHeader);
+  for (const field of Object.keys(aliases) as F[]) {
+    const found = normalized.findIndex((h) => aliases[field].map(normalizeHeader).includes(h));
+    if (found >= 0) index[field] = found;
+  }
+
+  const errors = required
+    .filter((f) => index[f] === undefined)
+    .map((f) => `ไม่พบคอลัมน์ "${aliases[f][0]}" (หัวคอลัมน์ที่พบ: ${headers.join(", ")})`);
+  return { data: errors.length ? [] : data, cell, errors };
+}
+
+export function parseCentersCsv(text: string): ParseResult {
+  const { data, cell, errors } = readCsvTable(text, HEADER_ALIASES, REQUIRED);
+  if (errors.length) return { rows: [], errors };
 
   const rows: CenterRow[] = [];
   const seenCodes = new Map<string, number>();
@@ -96,8 +98,7 @@ export function parseCentersCsv(text: string): ParseResult {
     if (!customerCode) rowErrors.push("ไม่มีรหัสลูกค้า");
     if (!name) rowErrors.push("ไม่มีชื่อศูนย์");
     if (normalAmount === null) rowErrors.push(`ยอดปกติไม่ถูกต้อง "${cell(record, "normalAmount")}"`);
-    if (!/^\d+$/.test(dueDayRaw) || dueDay < 1 || dueDay > 31)
-      rowErrors.push(`วันครบกำหนดต้องเป็นเลข 1-31 แต่ได้ "${dueDayRaw}"`);
+    if (!/^\d+$/.test(dueDayRaw) || dueDay < 1 || dueDay > 31) rowErrors.push(`วันครบกำหนดต้องเป็นเลข 1-31 แต่ได้ "${dueDayRaw}"`);
     if (!status) rowErrors.push(`สถานะไม่รู้จัก "${statusRaw}" (ใช้ได้: ใช้งาน / ย้าย / ปิด)`);
 
     if (customerCode) {

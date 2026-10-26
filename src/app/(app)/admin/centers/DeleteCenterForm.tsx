@@ -6,7 +6,8 @@ import { Alert, Button } from "@/components/ui";
 import { initialFormState } from "@/lib/formState";
 import { deleteCenter } from "@/server/actions/centers";
 
-export function DeleteCenterForm({ id, name }: { id: string; name: string }) {
+// ใช้ทั้งทะเบียนศูนย์และทะเบียนเบอร์โทรศัพท์ (deleteCenter พากลับหน้าทะเบียนตามประเภทเอง)
+export function DeleteCenterForm({ id, name, label = "ลบศูนย์นี้" }: { id: string; name: string; label?: string }) {
   const [state, action, pending] = useActionState(deleteCenter, initialFormState);
 
   return (
@@ -20,7 +21,7 @@ export function DeleteCenterForm({ id, name }: { id: string; name: string }) {
       <input type="hidden" name="id" value={id} />
       {state.error && <Alert tone="error">{state.error}</Alert>}
       <Button type="submit" variant="danger" icon={Trash} disabled={pending}>
-        ลบศูนย์นี้
+        {label}
       </Button>
     </form>
   );

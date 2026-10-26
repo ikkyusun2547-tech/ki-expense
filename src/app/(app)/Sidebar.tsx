@@ -1,6 +1,6 @@
 "use client";
 
-import { Building, Calculator, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Stamp, Users, Wifi, X } from "lucide-react";
+import { Building, Calculator, KeyRound, LayoutDashboard, LogOut, Menu, Receipt, Smartphone, Stamp, Users, Wifi, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -17,6 +17,7 @@ const ICONS: Record<string, IconType> = {
   "/accounting": Calculator,
   "/summary": LayoutDashboard,
   "/admin/centers": Building,
+  "/admin/phones": Smartphone,
   "/admin/users": Users,
 };
 

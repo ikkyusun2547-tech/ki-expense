@@ -4,11 +4,11 @@ import { useActionState, useEffect, useRef, useState, useTransition, type FormEv
 import { Check, CircleAlert, Paperclip, Search, Send, Sparkles, TriangleAlert } from "lucide-react";
 import { CenterStatusBadge } from "@/components/StatusBadge";
 import { ThaiDateInput } from "@/components/ThaiDateInput";
-import type { ApproverOption } from "@/server/services/approvers";
-import { Alert, Button, ButtonLink, cx, Field, inputClass, StepTitle } from "@/components/ui";
+import type { ApproverOption, MemoTextsByKind } from "@/server/services/approvers";
+import { Alert, Badge, Button, ButtonLink, cx, Field, inputClass, StepTitle } from "@/components/ui";
+import { formatPhone } from "@/lib/centers/phone";
 import { ACCEPT_ATTR, MAX_UPLOAD_LABEL } from "@/lib/files";
 import { formatAmount, parseAmount, toSatang } from "@/lib/money";
-import type { MemoTexts } from "@/lib/pdf/memoData";
 import type { RequestSuggestion } from "@/lib/rules/requestDefaults";
 import { daysInclusive, formatThaiDate, isISODate } from "@/lib/thai/date";
 import { findCenterByCode, saveRequest, type CenterSummary, type RequestFormState } from "@/server/actions/requests";
@@ -30,7 +30,7 @@ type SignerProps = {
   requesters: ApproverOption[];
   requesterId: string;
   defaultRequester: { id: string; name: string; title: string };
-  texts: MemoTexts; // จาก / เรียน / เพื่อ ของใบนี้ (สร้างใหม่: ตามใบล่าสุดของผู้จัดทำ)
+  texts: MemoTextsByKind; // จาก / เรียน / เพื่อ ของใบนี้ แยกตามประเภท (สร้างใหม่: ตามใบล่าสุดประเภทเดียวกันของผู้จัดทำ)
 };
 
 type Props = SignerProps & (
@@ -87,6 +87,10 @@ export function RequestForm(props: Props) {
   const typedAmount = center ? parseAmount(values.amount) : null;
   const amountDiffers = !!center && typedAmount !== null && toSatang(typedAmount) !== toSatang(center.normalAmount);
 
+  // ประเภทใบเบิกตามที่ค้นเจอ (ศูนย์ = ค่าอินเทอร์เน็ต / เบอร์ = ค่าโทรศัพท์)
+  const noun = center?.kind === "PHONE" ? "เบอร์" : "ศูนย์";
+  const texts = props.texts[center?.kind ?? "INTERNET"];
+
   const showResult = !resultStale && !saving;
   const blocks = showResult ? (state.blocks ?? []) : [];
   const warnings = showResult ? (state.warnings ?? []) : [];
@@ -101,8 +105,12 @@ export function RequestForm(props: Props) {
       <section>
         <StepTitle
           step={1}
-          title="เลือกศูนย์"
-          hint={props.mode === "create" ? "ค้นหาจากรหัสลูกค้า 3BB ตามใบแจ้งหนี้" : "เปลี่ยนศูนย์ไม่ได้ ถ้าเลือกศูนย์ผิดให้ลบใบเบิกแล้วสร้างใหม่"}
+          title="เลือกศูนย์ / เบอร์โทรศัพท์"
+          hint={
+            props.mode === "create"
+              ? "ค้นหาจากรหัสลูกค้า 3BB หรือเบอร์โทรศัพท์ ตามใบแจ้งหนี้"
+              : `เปลี่ยน${noun}ไม่ได้ ถ้าเลือก${noun}ผิดให้ลบใบเบิกแล้วสร้างใหม่`
+          }
         />
         {props.mode === "create" ? (
           <CenterLookup
@@ -132,7 +140,7 @@ export function RequestForm(props: Props) {
                 <Sparkles className="mt-0.5 size-3.5 shrink-0" aria-hidden />
                 {suggested.periodStart
                   ? "กรอกยอดปกติ รอบบริการถัดจากใบล่าสุด และวันครบกำหนดให้แล้ว — ตรวจให้ตรงใบแจ้งหนี้ แล้วกรอกเลขที่ใบแจ้งหนี้ + แนบไฟล์"
-                  : "กรอกยอดปกติและวันครบกำหนดให้แล้ว (ศูนย์นี้ยังไม่เคยเบิก จึงต้องกรอกรอบบริการเอง)"}
+                  : `กรอกยอดปกติและวันครบกำหนดให้แล้ว (${noun}นี้ยังไม่เคยเบิก จึงต้องกรอกรอบบริการเอง)`}
               </p>
             )}
           </div>
@@ -159,7 +167,7 @@ export function RequestForm(props: Props) {
           >
             <ThaiDateInput id="periodEnd" name="periodEnd" value={values.periodEnd} onChange={updateDate("periodEnd")} required />
           </Field>
-          <Field label="วันครบกำหนดชำระ" htmlFor="dueDate" hint={thaiHint(values.dueDate) ?? `ศูนย์นี้ครบกำหนดทุกวันที่ ${center.dueDay}`}>
+          <Field label="วันครบกำหนดชำระ" htmlFor="dueDate" hint={thaiHint(values.dueDate) ?? `${noun}นี้ครบกำหนดทุกวันที่ ${center.dueDay}`}>
             <ThaiDateInput id="dueDate" name="dueDate" value={values.dueDate} onChange={updateDate("dueDate")} required />
           </Field>
           <Field
@@ -217,24 +225,24 @@ export function RequestForm(props: Props) {
               />
             </div>
             {/* ข้อความหัวบันทึกของใบนี้ — ปกติเหมือนใบก่อน จึงพับไว้ */}
-            <details className="group mt-5 rounded-lg border border-slate-200">
+            <details key={center.kind} className="group mt-5 rounded-lg border border-slate-200">
               <summary className="flex cursor-pointer list-none items-start gap-3 px-4 py-3 text-sm text-slate-600 hover:bg-slate-50">
                 <span className="min-w-0 flex-1">
-                  <span className="font-medium text-slate-800">ข้อความบนใบเบิก</span> — จาก: {props.texts.department} · เรียน:{" "}
-                  {props.texts.recipient} · เพื่อ: {props.texts.purpose}
+                  <span className="font-medium text-slate-800">ข้อความบนใบเบิก</span> — จาก: {texts.department} · เรียน:{" "}
+                  {texts.recipient} · เพื่อ: {texts.purpose}
                 </span>
                 <span className="shrink-0 font-medium text-emerald-700 group-open:hidden">แก้ไข ▾</span>
               </summary>
               <div className="grid gap-4 border-t border-slate-100 p-4 sm:grid-cols-2">
                 <Field label="จาก (ชื่อฝ่าย)" htmlFor="department" hint="ใช้ในย่อหน้า “... ขอเบิกค่าใช้บริการ” ด้วย">
-                  <input id="department" name="department" defaultValue={props.texts.department} maxLength={150} className={inputClass} />
+                  <input id="department" name="department" defaultValue={texts.department} maxLength={150} className={inputClass} />
                 </Field>
                 <Field label="เพื่อ" htmlFor="purpose">
-                  <input id="purpose" name="purpose" defaultValue={props.texts.purpose} maxLength={150} className={inputClass} />
+                  <input id="purpose" name="purpose" defaultValue={texts.purpose} maxLength={150} className={inputClass} />
                 </Field>
                 <div className="sm:col-span-2">
                   <Field label="เรียน" htmlFor="recipient" hint="เว้นว่างช่องไหน = ใช้ข้อความตามฟอร์มจริง">
-                    <input id="recipient" name="recipient" defaultValue={props.texts.recipient} maxLength={150} className={inputClass} />
+                    <input id="recipient" name="recipient" defaultValue={texts.recipient} maxLength={150} className={inputClass} />
                   </Field>
                 </div>
               </div>
@@ -294,7 +302,7 @@ export function RequestForm(props: Props) {
         </form>
       ) : (
         <div className="border-t border-slate-100 pt-8 opacity-50">
-          <StepTitle step={2} title="ข้อมูลตามใบแจ้งหนี้" hint="ค้นหาศูนย์ให้เจอก่อน" />
+          <StepTitle step={2} title="ข้อมูลตามใบแจ้งหนี้" hint="ค้นหาศูนย์หรือเบอร์ให้เจอก่อน" />
         </div>
       )}
     </div>
@@ -339,7 +347,7 @@ function CenterLookup({
 
   return (
     <div className="flex flex-col gap-3">
-      <Field label="รหัสลูกค้า 3BB" htmlFor="customerCode" hint="พิมพ์แล้วกด Enter หรือปุ่มค้นหา">
+      <Field label="รหัสลูกค้า 3BB / เบอร์โทรศัพท์" htmlFor="customerCode" hint="พิมพ์แล้วกด Enter หรือปุ่มค้นหา">
         <div className="flex gap-2">
           <input
             id="customerCode"
@@ -366,19 +374,27 @@ function CenterLookup({
 }
 
 function CenterCard({ center }: { center: CenterSummary }) {
+  const phone = center.kind === "PHONE";
   return (
     <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-base font-medium text-slate-900">{center.name}</span>
-        <CenterStatusBadge status={center.status} />
+        <span className="text-base font-medium text-slate-900">{phone ? `${formatPhone(center.customerCode)} · ${center.name}` : center.name}</span>
+        <Badge tone={phone ? "sky" : "zinc"}>{phone ? "ค่าโทรศัพท์" : "ค่าอินเทอร์เน็ต"}</Badge>
+        <CenterStatusBadge status={center.status} kind={center.kind} />
       </div>
       <dl className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-slate-600">
-        <div>
-          รหัสลูกค้า <span className="tabular-nums text-slate-900">{center.customerCode}</span>
-        </div>
+        {phone ? (
+          <div>
+            ระบบ <span className="text-slate-900">{center.provider || "–"}</span>
+          </div>
+        ) : (
+          <div>
+            รหัสลูกค้า <span className="tabular-nums text-slate-900">{center.customerCode}</span>
+          </div>
+        )}
         {center.serviceNumber && (
           <div>
-            หมายเลขบริการ <span className="tabular-nums text-slate-900">{center.serviceNumber}</span>
+            {phone ? "รหัสลูกค้า" : "หมายเลขบริการ"} <span className="tabular-nums text-slate-900">{center.serviceNumber}</span>
           </div>
         )}
         <div>
@@ -386,7 +402,7 @@ function CenterCard({ center }: { center: CenterSummary }) {
         </div>
         <div>ครบกำหนดทุกวันที่ {center.dueDay}</div>
       </dl>
-      {center.status !== "ACTIVE" && <p className="mt-2 text-red-700">ศูนย์นี้ไม่ได้อยู่ในสถานะใช้งาน จึงเบิกไม่ได้</p>}
+      {center.status !== "ACTIVE" && <p className="mt-2 text-red-700">{phone ? "เบอร์" : "ศูนย์"}นี้ไม่ได้อยู่ในสถานะใช้งาน จึงเบิกไม่ได้</p>}
     </div>
   );
 }

@@ -7,7 +7,7 @@ export type CenterSummaryRow = CenterSummaryResult & {
   center: { id: string; customerCode: string; name: string; dueDay: number };
 };
 
-// ตารางสรุปรายศูนย์ — เฉพาะศูนย์ที่ใช้งานอยู่ (ศูนย์ย้าย/ปิด เบิกไม่ได้ จึงไม่ต้องติดตาม)
+// ตารางสรุปรายศูนย์ — เฉพาะศูนย์ (ค่าอินเทอร์เน็ต) ที่ใช้งานอยู่ (ศูนย์ย้าย/ปิด เบิกไม่ได้ จึงไม่ต้องติดตาม)
 // ใช้ใบเบิกที่วันครบกำหนดอยู่ในเดือนนี้หรือเดือนหน้าเท่านั้น
 export async function getCenterSummaries(today: ISODate): Promise<CenterSummaryRow[]> {
   const [y, m] = today.split("-").map(Number);
@@ -15,7 +15,7 @@ export async function getCenterSummaries(today: ISODate): Promise<CenterSummaryR
   const until = new Date(Date.UTC(y, m + 1, 1)); // วันแรกของเดือนถัดจากเดือนหน้า
 
   const centers = await db.center.findMany({
-    where: { status: "ACTIVE" },
+    where: { kind: "INTERNET", status: "ACTIVE" },
     orderBy: { customerCode: "asc" },
     include: {
       requests: {

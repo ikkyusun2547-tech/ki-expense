@@ -1,9 +1,11 @@
+import type { ServiceKind } from "@/generated/prisma/enums";
+import { formatPhone } from "@/lib/centers/phone";
 import { formatAmount, type AmountInput } from "@/lib/money";
 import { bahtText } from "@/lib/thai/bahtText";
 import { beYear, formatBEDate, formatThaiDate, formatThaiDateTime, thaiMonthName, type ISODate } from "@/lib/thai/date";
 
 // ข้อมูลบนใบเบิกแบบ "บันทึกภายใน" (FM-50000-02) — แยกจากหน้าตา PDF เพื่อทดสอบข้อความได้ตรง ๆ
-// วันที่ทุกจุดเป็น พ.ศ. ตามฟอร์มจริง
+// วันที่ทุกจุดเป็น พ.ศ. ตามฟอร์มจริง; ค่าอินเทอร์เน็ตกับค่าโทรศัพท์ใช้ฟอร์มเดียวกัน ต่างแค่ข้อความ (KIND_TEXT)
 
 export const COMPANY_NAME = "บริษัท น้ำตาลสุรินทร์ จำกัด";
 
@@ -19,6 +21,45 @@ export const DEFAULT_MEMO_TEXTS: MemoTexts = {
   department: "ฝ่ายจัดหาวัตถุดิบ",
   recipient: "ผู้จัดการฝ่ายบัญชี - ผู้จัดการฝ่ายการเงิน",
   purpose: "โปรดพิจารณา",
+};
+
+// ใบแรกของผู้จัดทำในแต่ละประเภท (ค่าโทรศัพท์: ตามฟอร์มจริงที่ผู้ใช้ส่งมา 2026-10-26)
+export const DEFAULT_MEMO_TEXTS_BY_KIND: Record<ServiceKind, MemoTexts> = {
+  INTERNET: DEFAULT_MEMO_TEXTS,
+  PHONE: {
+    department: "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์",
+    recipient: "ผู้จัดการฝ่ายบัญชี - ผู้จัดการฝ่ายการเงิน",
+    purpose: "โปรดพิจารณาดำเนินการ",
+  },
+};
+
+// ช่องที่เว้นว่าง = ข้อความตามฟอร์มจริงของประเภทนั้น
+export function fillMemoTexts(texts: MemoTexts, kind: ServiceKind): MemoTexts {
+  const d = DEFAULT_MEMO_TEXTS_BY_KIND[kind];
+  return { department: texts.department || d.department, recipient: texts.recipient || d.recipient, purpose: texts.purpose || d.purpose };
+}
+
+// ระบบ (ค่าย) ของค่าอินเทอร์เน็ต — ทะเบียนศูนย์ไม่มีช่องนี้ ใช้ 3BB ทุกศูนย์
+export const INTERNET_PROVIDER = "3BB";
+
+// ข้อความที่ต่างกันตามประเภท (ช่องว่างในข้อความคงที่ = จุดที่ยอมให้ขึ้นบรรทัดใหม่ใน PDF)
+const KIND_TEXT: Record<ServiceKind, { subject: string; service: string; intro: string; table: string; codeHeader: string; attached: string }> = {
+  INTERNET: {
+    subject: "ขอเบิกค่าใช้บริการอินเตอร์เน็ต 3BB",
+    service: "อินเตอร์เน็ต",
+    intro: "เนื่องด้วย บริษัท น้ำตาลสุรินทร์ จำกัด ได้เปิดใช้บริการอินเตอร์เน็ต เพื่ออำนวยความสะดวกในการทำงานภายในบริษัทฯ",
+    table: "ตารางค่าใช้จ่ายอินเตอร์เน็ตของบริษัทฯ",
+    codeHeader: "รหัสลูกค้า",
+    attached: "ตามเอกสารที่แนบท้ายนี้",
+  },
+  PHONE: {
+    subject: "ขอเบิกค่าใช้บริการโทรศัพท์",
+    service: "โทรศัพท์",
+    intro: "เนื่องด้วย บริษัท น้ำตาลสุรินทร์ จำกัด ได้เปิดใช้บริการหมายเลขโทรศัพท์ เพื่ออำนวยความสะดวกในการทำงานภายในบริษัทฯ",
+    table: "ตารางค่าใช้จ่ายโทรศัพท์เคลื่อนที่ของบริษัทฯ",
+    codeHeader: "หมายเลขโทรศัพท์",
+    attached: "ตามเอกสารที่แนบมาพร้อมนี้",
+  },
 };
 
 // รหัสฟอร์มท้ายกระดาษ — ฟอร์มออกรุ่นใหม่ให้แก้ที่นี่
@@ -61,9 +102,11 @@ export function chosenSignersOf(row: {
 }
 
 export type MemoInput = {
+  kind?: ServiceKind; // ไม่ส่ง = ค่าอินเทอร์เน็ต
   memoDate: ISODate; // วันที่ของบันทึก (วันที่สร้างใบเบิก ตามเวลาไทย)
-  customerCode: string;
-  serviceUser: string; // ผู้ใช้บริการ = ชื่อศูนย์
+  customerCode: string; // อินเทอร์เน็ต = รหัสลูกค้า, โทรศัพท์ = หมายเลข (ตัวเลขล้วน)
+  provider?: string; // ระบบ (ค่าย) — อินเทอร์เน็ตไม่ส่ง = 3BB
+  serviceUser: string; // ผู้ใช้บริการ = ชื่อศูนย์ / ฝ่ายที่ใช้เบอร์
   amount: AmountInput;
   dueDate: ISODate;
   creator: Creator; // ผู้จัดทำ (ผู้ขออนุมัติค่าเริ่มต้น)
@@ -82,8 +125,9 @@ export type MemoData = {
   purpose: string;
   intro: string;
   tableTitle: string;
+  codeHeader: string; // หัวคอลัมน์ที่ 2: รหัสลูกค้า / หมายเลขโทรศัพท์
   monthHeader: string;
-  rows: { no: number; customerCode: string; serviceUser: string; amount: string; dueDate: string }[];
+  rows: { no: number; customerCode: string; provider: string; serviceUser: string; amount: string; dueDate: string }[];
   total: string;
   // ย่อหน้าหลัก แยกส่วนตัวหนาตามฟอร์ม
   bodyLead: string;
@@ -98,27 +142,34 @@ export type MemoData = {
 
 export function buildMemo(input: MemoInput): MemoData {
   const { texts: s } = input;
+  const kind = input.kind ?? "INTERNET";
+  const k = KIND_TEXT[kind];
   const amount = formatAmount(input.amount);
-  const lines = 1; // v1: 1 ใบเบิก = 1 ศูนย์ = 1 เลขหมาย
+  const lines = 1; // v1: 1 ใบเบิก = 1 ศูนย์/เบอร์ = 1 เลขหมาย
   const { requester, approver } = resolveSigners(input.signers, input.creator);
+  const code = kind === "PHONE" ? formatPhone(input.customerCode) : input.customerCode;
+  const provider = input.provider || (kind === "INTERNET" ? INTERNET_PROVIDER : "");
 
   return {
     company: COMPANY_NAME,
     date: formatThaiDate(input.memoDate, "long"),
-    subject: "ขอเบิกค่าใช้บริการอินเตอร์เน็ต 3BB",
-    subjectDetail: `(${input.serviceUser})`,
+    subject: k.subject,
+    // อินเทอร์เน็ต: ชื่อศูนย์ใต้เรื่อง (ตามฟอร์มจริง) / โทรศัพท์: ไม่มี
+    subjectDetail: kind === "INTERNET" ? `(${input.serviceUser})` : "",
     from: s.department,
     to: s.recipient,
     purpose: s.purpose,
-    intro: "เนื่องด้วย บริษัท น้ำตาลสุรินทร์ จำกัด ได้เปิดใช้บริการอินเตอร์เน็ต เพื่ออำนวยความสะดวกในการทำงานภายในบริษัทฯ",
-    tableTitle: `ตารางค่าใช้จ่ายอินเตอร์เน็ตของบริษัทฯ ${beYear(input.dueDate)}`,
+    intro: k.intro,
+    tableTitle: `${k.table} ${beYear(input.dueDate)}`,
+    codeHeader: k.codeHeader,
     monthHeader: thaiMonthName(input.dueDate),
-    rows: [{ no: 1, customerCode: input.customerCode, serviceUser: input.serviceUser, amount, dueDate: formatBEDate(input.dueDate) }],
+    rows: [{ no: 1, customerCode: code, provider, serviceUser: input.serviceUser, amount, dueDate: formatBEDate(input.dueDate) }],
     total: amount,
-    bodyLead: `${s.department} ขอเบิกค่าใช้บริการอินเตอร์เน็ต จำนวน ${lines} เลขหมาย รอบค่าใช้บริการ `,
+    bodyLead: `${s.department} ขอเบิกค่าใช้บริการ${k.service} จำนวน ${lines} เลขหมาย รอบค่าใช้บริการ `,
     bodyBold: `เดือน ${thaiMonthName(input.dueDate)} ${beYear(input.dueDate)} เป็นจำนวนเงินทั้งสิ้น ${amount} บาท (${bahtText(input.amount)})`,
-    bodyTail: " ตามเอกสารที่แนบท้ายนี้",
-    closing: "จึงเรียนมาเพื่อโปรดพิจารณา",
+    bodyTail: ` ${k.attached}`,
+    // ฟอร์มจริงทั้งสองแบบ: "จึงเรียนมาเพื่อ" + ข้อความช่อง "เพื่อ"
+    closing: `จึงเรียนมาเพื่อ${s.purpose}`,
     requester: { name: requester.name, title: requester.title },
     approver: { name: approver.name, title: approver.title },
     approvedNote: input.approvedAt ? `อนุมัติในระบบ ${formatThaiDateTime(input.approvedAt)} น.` : null,

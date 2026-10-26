@@ -1,4 +1,4 @@
-import type { CenterStatus, LogAction, RequestStatus, Role } from "@/generated/prisma/enums";
+import type { CenterStatus, LogAction, RequestStatus, Role, ServiceKind } from "@/generated/prisma/enums";
 
 // state machine ของใบเบิก + สิทธิ์ตามบทบาท — ใช้ทั้งฝั่งเซิร์ฟเวอร์ (บังคับ) และหน้าจอ (ซ่อนปุ่ม)
 //
@@ -40,6 +40,16 @@ export const CENTER_STATUS_LABEL: Record<CenterStatus, string> = {
   MOVED: "ย้าย",
   CLOSED: "ปิด",
 };
+
+// เบอร์โทรศัพท์ไม่มีสถานะ "ย้าย" (CHECK Center_phone_status) และเรียก CLOSED ว่า "ยกเลิก"
+export const PHONE_STATUS_LABEL: Record<"ACTIVE" | "CLOSED", string> = {
+  ACTIVE: "ใช้งาน",
+  CLOSED: "ยกเลิก",
+};
+
+export function centerStatusLabel(status: CenterStatus, kind: ServiceKind = "INTERNET"): string {
+  return kind === "PHONE" && status !== "MOVED" ? PHONE_STATUS_LABEL[status] : CENTER_STATUS_LABEL[status];
+}
 
 export const ROLE_LABEL: Record<Role, string> = {
   CREATOR: "ผู้จัดทำ",

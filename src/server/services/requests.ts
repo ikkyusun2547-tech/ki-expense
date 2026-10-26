@@ -1,7 +1,7 @@
 import "server-only";
-import type { Role } from "@/generated/prisma/enums";
+import type { Role, ServiceKind } from "@/generated/prisma/enums";
 import { toAmountString } from "@/lib/money";
-import { DEFAULT_MEMO_TEXTS, type MemoTexts } from "@/lib/pdf/memoData";
+import { fillMemoTexts, type MemoTexts } from "@/lib/pdf/memoData";
 import { checkPayment, type PaymentInput } from "@/lib/rules/paymentRules";
 import { checkRequest, needsConfirm, type Issue, type RequestDraft } from "@/lib/rules/requestRules";
 import { checkSignerChange, checkTransition, isAssignedApprover, type RequestAction } from "@/lib/status";
@@ -58,14 +58,14 @@ async function validate(args: {
   hasExistingFile: boolean;
   confirmWarnings: boolean;
   excludeRequestId?: string;
-}): Promise<{ ok: true } | Extract<SaveOutcome, { ok: false }>> {
+}): Promise<{ ok: true; kind: ServiceKind } | Extract<SaveOutcome, { ok: false }>> {
   const center = await db.center.findUnique({ where: { id: args.centerId } });
-  if (!center) return { ok: false, blocks: [], warnings: [], error: "ไม่พบศูนย์นี้ในทะเบียน" };
+  if (!center) return { ok: false, blocks: [], warnings: [], error: "ไม่พบศูนย์/เบอร์นี้ในทะเบียน" };
 
   const draft: RequestDraft = { ...args.input, hasFile: !!args.file || args.hasExistingFile };
   const { blocks, warnings } = checkRequest(
     draft,
-    { status: center.status, normalAmount: center.normalAmount.toFixed(2) },
+    { status: center.status, normalAmount: center.normalAmount.toFixed(2), kind: center.kind },
     await existingPeriods(center.id, args.excludeRequestId),
   );
   if (args.input.invoiceNo.trim().length > MAX_INVOICE_NO) {
@@ -73,7 +73,7 @@ async function validate(args: {
   }
 
   if (blocks.length || (needsConfirm(warnings) && !args.confirmWarnings)) return { ok: false, blocks, warnings };
-  return { ok: true };
+  return { ok: true, kind: center.kind };
 }
 
 async function storeFile(file: File | null): Promise<{ ok: true; saved: SavedFile | null } | { ok: false; error: string }> {
@@ -105,7 +105,7 @@ export async function createRequest(args: {
   confirmWarnings: boolean;
   approverId?: string | null;
   requesterId?: string | null;
-  texts?: MemoTexts; // จาก / เรียน / เพื่อ (ไม่ส่ง = ข้อความตามฟอร์มจริง)
+  texts?: MemoTexts; // จาก / เรียน / เพื่อ (ไม่ส่ง/ช่องว่าง = ข้อความตามฟอร์มจริงของประเภทนั้น)
   actor: CurrentUser;
 }): Promise<SaveOutcome> {
   const approver = await signerSnapshot(args.approverId ?? null, "APPROVER");
@@ -128,7 +128,7 @@ export async function createRequest(args: {
           invoiceFileName: stored.saved?.fileName,
           ...approverData(approver),
           ...requesterData(requester),
-          ...(args.texts ?? DEFAULT_MEMO_TEXTS),
+          ...fillMemoTexts(args.texts ?? { department: "", recipient: "", purpose: "" }, check.kind),
           createdById: args.actor.id,
         },
       });
@@ -166,9 +166,6 @@ export async function updateRequest(args: {
   const approver = changed(args.approverId, current.approverId) ? await signerSnapshot(args.approverId ?? null, "APPROVER") : undefined;
   const requester = changed(args.requesterId, current.requesterId) ? await signerSnapshot(args.requesterId ?? null, "CREATOR") : undefined;
   if (approver === null || requester === null) return { ok: false, blocks: [], warnings: [], error: SIGNER_NOT_FOUND };
-  const textsChanged =
-    !!args.texts && (["department", "recipient", "purpose"] as const).some((k) => args.texts![k] !== current[k]);
-
   const check = await validate({
     centerId: current.centerId,
     input: args.input,
@@ -178,6 +175,9 @@ export async function updateRequest(args: {
     excludeRequestId: current.id,
   });
   if (!check.ok) return check;
+
+  const texts = args.texts && fillMemoTexts(args.texts, check.kind);
+  const textsChanged = !!texts && (["department", "recipient", "purpose"] as const).some((k) => texts[k] !== current[k]);
 
   const stored = await storeFile(args.file);
   if (!stored.ok) return { ok: false, blocks: [], warnings: [], error: stored.error };
@@ -192,7 +192,7 @@ export async function updateRequest(args: {
           ...(stored.saved && { invoiceFileKey: stored.saved.key, invoiceFileName: stored.saved.fileName }),
           ...(approver && approverData(approver)),
           ...(requester && requesterData(requester)),
-          ...args.texts,
+          ...texts,
         },
       });
       if (updated.count === 0) throw new StaleRequestError();

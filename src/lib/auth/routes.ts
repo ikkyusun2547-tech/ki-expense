@@ -29,6 +29,7 @@ export const NAV_ITEMS: Record<Role, NavItem[]> = {
     { href: "/accounting", label: "ฝ่ายบัญชี" },
     SUMMARY,
     { href: "/admin/centers", label: "ทะเบียนศูนย์", group: "admin" },
+    { href: "/admin/phones", label: "ทะเบียนเบอร์โทร", group: "admin" },
     { href: "/admin/users", label: "ผู้ใช้", group: "admin" },
   ],
 };
