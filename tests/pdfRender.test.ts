@@ -41,6 +41,7 @@ describe("renderInternalMemo", () => {
         serviceUser: "รัฐกิจสัมพันธ์",
         amount: "408.40",
         dueDate: "2026-11-09",
+        periodEnd: "2026-10-15",
         creator: { name: "นางสาวทดสอบ จัดทำ", title: "เจ้าหน้าที่รัฐกิจสัมพันธ์" },
         signers: { requester: null, approver: { name: "นายตัวอย่าง อนุมัติ", title: "รักษาการผู้จัดการส่วนรัฐกิจและหลักทรัพย์" } },
         texts: DEFAULT_MEMO_TEXTS_BY_KIND.PHONE,

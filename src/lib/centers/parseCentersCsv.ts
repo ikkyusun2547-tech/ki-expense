@@ -1,6 +1,7 @@
 import { parse } from "csv-parse/sync";
 import type { CenterStatus } from "@/generated/prisma/enums";
 import { parseAmount } from "@/lib/money";
+import { INTERNET_PROVIDER } from "@/lib/pdf/memoData";
 
 // แปลงไฟล์ CSV ทะเบียนศูนย์เป็นข้อมูลพร้อม upsert
 // ไม่แตะ DB — ตรวจทั้งไฟล์แล้วคืน error ทุกบรรทัด เพื่อให้แก้ไฟล์ได้ในรอบเดียว
@@ -8,6 +9,7 @@ import { parseAmount } from "@/lib/money";
 export type CenterRow = {
   customerCode: string;
   serviceNumber: string | null;
+  provider: string; // ระบบ (ค่าย) — ว่าง = 3BB
   name: string;
   normalAmount: string; // ทศนิยม 2 ตำแหน่งเป็นข้อความ เช่น "749.00" (ส่งเข้า Prisma Decimal ตรง ๆ)
   dueDay: number;
@@ -26,6 +28,7 @@ type Field = keyof CenterRow;
 const HEADER_ALIASES: Record<Field, string[]> = {
   customerCode: ["รหัสลูกค้า", "customercode", "customer_code"],
   serviceNumber: ["หมายเลขบริการ", "servicenumber", "service_number"],
+  provider: ["ระบบ", "ค่าย", "provider"],
   name: ["ชื่อศูนย์", "ศูนย์", "name"],
   normalAmount: ["ยอดปกติ", "normalamount", "normal_amount", "amount"],
   dueDay: ["วันครบกำหนด", "วันครบกำหนดประจำเดือน", "dueday", "due_day"],
@@ -115,6 +118,7 @@ export function parseCentersCsv(text: string): ParseResult {
     rows.push({
       customerCode,
       serviceNumber: cell(record, "serviceNumber") || null,
+      provider: (cell(record, "provider") || INTERNET_PROVIDER).toUpperCase(),
       name,
       normalAmount: normalAmount!,
       dueDay,

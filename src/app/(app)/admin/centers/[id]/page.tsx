@@ -26,6 +26,7 @@ export default async function EditCenterPage({ params }: PageProps<"/admin/cente
               id: center.id,
               customerCode: center.customerCode,
               serviceNumber: center.serviceNumber ?? "",
+              provider: center.provider,
               name: center.name,
               normalAmount: center.normalAmount.toFixed(2),
               dueDay: String(center.dueDay),

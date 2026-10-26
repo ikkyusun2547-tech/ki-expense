@@ -74,6 +74,12 @@ describe("buildMemo", () => {
     expect(m.approvedNote).toBe("อนุมัติในระบบ 24 ต.ค. 2569 10:30 น.");
   });
 
+  it("ค่ายของศูนย์ (ทะเบียนศูนย์) → ทั้งเรื่องและคอลัมน์ระบบ", () => {
+    const m = buildMemo({ ...base, provider: "TRUE" });
+    expect(m.subject).toBe("ขอเบิกค่าใช้บริการอินเตอร์เน็ต TRUE");
+    expect(m.rows[0].provider).toBe("TRUE");
+  });
+
   it("ยอดมีสตางค์ และข้ามปี", () => {
     const m = buildMemo({ ...base, memoDate: "2026-12-20", amount: "1068.93", dueDate: "2027-01-05" });
     expect(m.tableTitle).toBe("ตารางค่าใช้จ่ายอินเตอร์เน็ตของบริษัทฯ 2570");
@@ -92,6 +98,7 @@ describe("buildMemo ค่าโทรศัพท์", () => {
     serviceUser: "รัฐกิจสัมพันธ์",
     amount: "408.40",
     dueDate: "2026-11-09",
+    periodEnd: "2026-10-15", // รอบ 16 ก.ย. – 15 ต.ค. 2569
     texts: DEFAULT_MEMO_TEXTS_BY_KIND.PHONE,
   });
 
@@ -108,6 +115,7 @@ describe("buildMemo ค่าโทรศัพท์", () => {
 
   it("ตาราง: หมายเลขโทรศัพท์แบบมีขีด + ระบบ", () => {
     expect(phone.tableTitle).toBe("ตารางค่าใช้จ่ายโทรศัพท์เคลื่อนที่ของบริษัทฯ 2569");
+    expect(phone.monthHeader).toBe("ตุลาคม"); // เดือนของรอบบริการ ไม่ใช่เดือนครบกำหนด (พ.ย.)
     expect(phone.codeHeader).toBe("หมายเลขโทรศัพท์");
     expect(phone.rows).toEqual([
       { no: 1, customerCode: "097-3378822", provider: "TRUE", serviceUser: "รัฐกิจสัมพันธ์", amount: "408.40", dueDate: "09/11/2569" },
@@ -117,9 +125,18 @@ describe("buildMemo ค่าโทรศัพท์", () => {
   it("ย่อหน้าหลักและคำปิดตรงกับฟอร์มจริง", () => {
     expect(phone.bodyLead + phone.bodyBold + phone.bodyTail).toBe(
       "ฝ่ายรัฐกิจสัมพันธ์และหลักทรัพย์ ขอเบิกค่าใช้บริการโทรศัพท์ จำนวน 1 เลขหมาย รอบค่าใช้บริการ " +
-        "เดือน พฤศจิกายน 2569 เป็นจำนวนเงินทั้งสิ้น 408.40 บาท (สี่ร้อยแปดบาทสี่สิบสตางค์) ตามเอกสารที่แนบมาพร้อมนี้",
+        "เดือน ตุลาคม 2569 เป็นจำนวนเงินทั้งสิ้น 408.40 บาท (สี่ร้อยแปดบาทสี่สิบสตางค์) ตามเอกสารที่แนบมาพร้อมนี้",
     );
     expect(phone.closing).toBe("จึงเรียนมาเพื่อโปรดพิจารณาดำเนินการ");
+  });
+
+  it("เดือนของรอบบริการข้ามปี: รอบสิ้นสุด 15 ธ.ค. 2569 ครบกำหนด ม.ค. 2570 → ธันวาคม 2569", () => {
+    const m = buildMemo({ ...base, kind: "PHONE", customerCode: "0973378822", periodEnd: "2026-12-15", dueDate: "2027-01-09", texts });
+    expect([m.monthHeader, m.tableTitle.slice(-4)]).toEqual(["ธันวาคม", "2569"]);
+  });
+
+  it("ค่าอินเทอร์เน็ตยังใช้เดือนของวันครบกำหนด แม้ส่ง periodEnd มา", () => {
+    expect(buildMemo({ ...base, periodEnd: "2026-10-31" }).monthHeader).toBe("พฤศจิกายน");
   });
 
   it("fillMemoTexts: ช่องว่างใช้ข้อความตามฟอร์มของประเภทนั้น", () => {

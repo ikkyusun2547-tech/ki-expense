@@ -26,7 +26,7 @@ export type CenterSummary = {
 
 export type CenterLookup = { ok: true; center: CenterSummary; suggestion: RequestSuggestion } | { ok: false; error: string };
 
-// ผู้จัดทำพิมพ์รหัสลูกค้า 3BB หรือเบอร์โทรศัพท์ (ช่องเดียว) → แสดงศูนย์/เบอร์ + ยอดปกติ — ประเภทใบเบิกตามที่เจอ
+// ผู้จัดทำพิมพ์รหัสลูกค้า (อินเทอร์เน็ต) หรือเบอร์โทรศัพท์ (ช่องเดียว) → แสดงศูนย์/เบอร์ + ยอดปกติ — ประเภทใบเบิกตามที่เจอ
 // ตรงตัวก่อน (รหัสลูกค้า / เบอร์ที่พิมพ์เป็นตัวเลขล้วน) ไม่เจอค่อยลองอ่านเป็นเบอร์ (097-3378822, +66…)
 export async function findCenterByCode(code: string): Promise<CenterLookup> {
   await requireRole("CREATOR");

@@ -29,8 +29,8 @@ afterAll(async () => {
 describe("นำเข้าทะเบียนศูนย์จาก CSV", () => {
   it("ตรวจไฟล์ → บอกเพิ่มใหม่/อัปเดต/ไม่เปลี่ยน โดยยังไม่บันทึก; นำเข้า → upsert ทั้งไฟล์", async () => {
     await loginAs("admin", "ADMIN");
-    await db.center.create({ data: { customerCode: code(1), name: "ศูนย์เดิม", normalAmount: "749.00", dueDay: 10 } });
-    await db.center.create({ data: { customerCode: code(2), name: "ศูนย์ไม่เปลี่ยน", normalAmount: "599.00", dueDay: 5 } });
+    await db.center.create({ data: { customerCode: code(1), provider: "3BB", name: "ศูนย์เดิม", normalAmount: "749.00", dueDay: 10 } });
+    await db.center.create({ data: { customerCode: code(2), provider: "3BB", name: "ศูนย์ไม่เปลี่ยน", normalAmount: "599.00", dueDay: 5 } });
     const text = csv([
       `${code(1)},,ศูนย์เดิม (ย้ายที่),800,10,ใช้งาน`,
       `${code(2)},,ศูนย์ไม่เปลี่ยน,599,5,`,

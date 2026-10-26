@@ -11,7 +11,7 @@ import { db } from "@/server/db";
 // mode=preview: ตรวจไฟล์อย่างเดียว (ไม่บันทึก) / mode=import: บันทึกจริง (ตรวจซ้ำก่อนเสมอ)
 // ไฟล์มีปัญหาแม้บรรทัดเดียว → ไม่นำเข้าอะไรเลย แจ้งทุกบรรทัดให้แก้ในรอบเดียว
 
-type ImportRow = CenterRow & { provider?: string };
+type ImportRow = CenterRow;
 
 export type ImportPreviewRow = ImportRow & { action: "new" | "update" | "same" };
 
@@ -36,7 +36,7 @@ type Existing = {
 
 const same = (row: ImportRow, c: Existing) =>
   c.serviceNumber === row.serviceNumber &&
-  (row.provider === undefined || c.provider === row.provider) &&
+  c.provider === row.provider &&
   c.name === row.name &&
   c.normalAmount.toFixed(2) === row.normalAmount &&
   c.dueDay === row.dueDay &&

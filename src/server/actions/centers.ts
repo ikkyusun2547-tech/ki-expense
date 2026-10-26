@@ -8,7 +8,7 @@ import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
 import { isUniqueViolation } from "@/server/dbErrors";
 
-const FIELDS = ["customerCode", "serviceNumber", "name", "normalAmount", "dueDay", "status"] as const;
+const FIELDS = ["customerCode", "serviceNumber", "provider", "name", "normalAmount", "dueDay", "status"] as const;
 const PHONE_FIELDS = ["phoneNumber", "provider", "accountCode", "name", "normalAmount", "dueDay", "status"] as const;
 
 const REGISTRY_PATH: Record<ServiceKind, string> = { INTERNET: "/admin/centers", PHONE: "/admin/phones" };

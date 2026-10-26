@@ -11,6 +11,7 @@ describe("centerSchema", () => {
   const valid = {
     customerCode: " 1001 ",
     serviceNumber: "",
+    provider: "true ",
     name: "ศูนย์ท่าตูม",
     normalAmount: "1,068.9",
     dueDay: "5",
@@ -21,6 +22,7 @@ describe("centerSchema", () => {
     expect(centerSchema.parse(valid)).toEqual({
       customerCode: "1001",
       serviceNumber: null,
+      provider: "TRUE",
       name: "ศูนย์ท่าตูม",
       normalAmount: "1068.90",
       dueDay: 5,

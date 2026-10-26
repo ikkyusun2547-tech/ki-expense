@@ -27,6 +27,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/requests/[i
       serviceUser: request.center.name,
       amount: request.amount,
       dueDate: toISODate(request.dueDate),
+      periodEnd: toISODate(request.periodEnd),
       creator: request.createdBy,
       signers: chosenSignersOf(request),
       approvedAt: request.approvedAt,

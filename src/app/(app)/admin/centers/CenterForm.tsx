@@ -2,7 +2,9 @@
 
 import { useActionState } from "react";
 import { Alert, Button, ButtonLink, Field, inputClass } from "@/components/ui";
+import { PROVIDER_SUGGESTIONS } from "@/lib/centers/phone";
 import { initialFormState } from "@/lib/formState";
+import { INTERNET_PROVIDER } from "@/lib/pdf/memoData";
 import { CENTER_STATUS_LABEL } from "@/lib/status";
 import { saveCenter } from "@/server/actions/centers";
 
@@ -10,6 +12,7 @@ export type CenterFormValues = {
   id?: string;
   customerCode: string;
   serviceNumber: string;
+  provider: string;
   name: string;
   normalAmount: string;
   dueDay: string;
@@ -19,6 +22,7 @@ export type CenterFormValues = {
 const EMPTY: CenterFormValues = {
   customerCode: "",
   serviceNumber: "",
+  provider: INTERNET_PROVIDER,
   name: "",
   normalAmount: "",
   dueDay: "",
@@ -64,6 +68,14 @@ export function CenterForm({ center = EMPTY }: { center?: CenterFormValues }) {
             </option>
           ))}
         </select>
+      </Field>
+      <Field label="ระบบ (ค่าย)" htmlFor="provider" errors={errors.provider} hint="พิมพ์ในใบเบิก เช่น 3BB, TRUE, AIS">
+        <input id="provider" name="provider" list="internet-providers" defaultValue={v.provider} required aria-invalid={!!errors.provider} className={inputClass} />
+        <datalist id="internet-providers">
+          {[INTERNET_PROVIDER, ...PROVIDER_SUGGESTIONS.filter((p) => p !== "DTAC")].map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
       </Field>
 
       <div className="flex gap-2 sm:col-span-2">

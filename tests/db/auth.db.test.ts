@@ -103,7 +103,7 @@ describe("เปลี่ยนรหัสผ่าน", () => {
 
 describe("เช็กสิทธิ์ฝั่งเซิร์ฟเวอร์ (เรียก action ตรง ๆ ไม่ผ่านหน้าจอ)", () => {
   const centerForm = () =>
-    form({ customerCode: `${PREFIX}C1`, serviceNumber: "", name: "ศูนย์ทดสอบ", normalAmount: "749", dueDay: "5", status: "ACTIVE" });
+    form({ customerCode: `${PREFIX}C1`, serviceNumber: "", provider: "3BB", name: "ศูนย์ทดสอบ", normalAmount: "749", dueDay: "5", status: "ACTIVE" });
 
   it("ไม่ได้ล็อกอิน → ถูกส่งไปหน้าล็อกอิน และไม่มีอะไรถูกบันทึก", async () => {
     expect(await run(() => saveCenter(initialFormState, centerForm()))).toEqual({ redirect: "/login" });
@@ -146,10 +146,11 @@ describe("admin จัดการศูนย์", () => {
   });
 
   it("เพิ่มศูนย์ แล้วรหัสลูกค้าซ้ำถูกปฏิเสธ", async () => {
-    const values = { customerCode: `${PREFIX}C1`, serviceNumber: "044", name: "ศูนย์ทดสอบ", normalAmount: "1,068.93", dueDay: "5", status: "ACTIVE" };
+    const values = { customerCode: `${PREFIX}C1`, serviceNumber: "044", provider: "AIS", name: "ศูนย์ทดสอบ", normalAmount: "1,068.93", dueDay: "5", status: "ACTIVE" };
     expect(await run(() => saveCenter(initialFormState, form(values)))).toEqual({ redirect: "/admin/centers" });
     const saved = await db.center.findUniqueOrThrow({ where: { customerCode: `${PREFIX}C1` } });
     expect(saved.normalAmount.toFixed(2)).toBe("1068.93");
+    expect(saved.provider).toBe("AIS");
 
     const dup = await run(() => saveCenter(initialFormState, form({ ...values, name: "ซ้ำ" })));
     expect(dup).toMatchObject({ result: { fieldErrors: { customerCode: ["รหัสลูกค้านี้มีในทะเบียนแล้ว"] } } });

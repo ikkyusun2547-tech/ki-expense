@@ -65,6 +65,7 @@ describe("admin จัดการทะเบียนเบอร์โทร�
       id: saved.id,
       customerCode: phone(2),
       serviceNumber: "",
+      provider: "3BB",
       name: "x",
       normalAmount: "1",
       dueDay: "1",

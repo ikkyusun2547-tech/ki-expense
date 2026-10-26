@@ -108,7 +108,7 @@ export function RequestForm(props: Props) {
           title="เลือกศูนย์ / เบอร์โทรศัพท์"
           hint={
             props.mode === "create"
-              ? "ค้นหาจากรหัสลูกค้า 3BB หรือเบอร์โทรศัพท์ ตามใบแจ้งหนี้"
+              ? "ค้นหาจากรหัสลูกค้า (อินเทอร์เน็ต) หรือเบอร์โทรศัพท์ ตามใบแจ้งหนี้"
               : `เปลี่ยน${noun}ไม่ได้ ถ้าเลือก${noun}ผิดให้ลบใบเบิกแล้วสร้างใหม่`
           }
         />
@@ -347,7 +347,7 @@ function CenterLookup({
 
   return (
     <div className="flex flex-col gap-3">
-      <Field label="รหัสลูกค้า 3BB / เบอร์โทรศัพท์" htmlFor="customerCode" hint="พิมพ์แล้วกด Enter หรือปุ่มค้นหา">
+      <Field label="รหัสลูกค้า / เบอร์โทรศัพท์" htmlFor="customerCode" hint="พิมพ์แล้วกด Enter หรือปุ่มค้นหา">
         <div className="flex gap-2">
           <input
             id="customerCode"
@@ -383,15 +383,14 @@ function CenterCard({ center }: { center: CenterSummary }) {
         <CenterStatusBadge status={center.status} kind={center.kind} />
       </div>
       <dl className="mt-1 flex flex-wrap gap-x-6 gap-y-1 text-slate-600">
-        {phone ? (
-          <div>
-            ระบบ <span className="text-slate-900">{center.provider || "–"}</span>
-          </div>
-        ) : (
+        {!phone && (
           <div>
             รหัสลูกค้า <span className="tabular-nums text-slate-900">{center.customerCode}</span>
           </div>
         )}
+        <div>
+          ระบบ <span className="text-slate-900">{center.provider || "–"}</span>
+        </div>
         {center.serviceNumber && (
           <div>
             {phone ? "รหัสลูกค้า" : "หมายเลขบริการ"} <span className="tabular-nums text-slate-900">{center.serviceNumber}</span>

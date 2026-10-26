@@ -16,9 +16,9 @@ describe("parseCentersCsv", () => {
 
     expect(errors).toEqual([]);
     expect(rows).toEqual([
-      { customerCode: "1001", serviceNumber: "0441234567", name: "ศูนย์ท่าตูม", normalAmount: "749.00", dueDay: 5, status: "ACTIVE" },
-      { customerCode: "1002", serviceNumber: null, name: "ศูนย์ศีขรภูมิ", normalAmount: "1068.93", dueDay: 20, status: "MOVED" },
-      { customerCode: "1003", serviceNumber: "0449999999", name: "ศูนย์รัตนบุรี", normalAmount: "631.30", dueDay: 31, status: "CLOSED" },
+      { customerCode: "1001", serviceNumber: "0441234567", provider: "3BB", name: "ศูนย์ท่าตูม", normalAmount: "749.00", dueDay: 5, status: "ACTIVE" },
+      { customerCode: "1002", serviceNumber: null, provider: "3BB", name: "ศูนย์ศีขรภูมิ", normalAmount: "1068.93", dueDay: 20, status: "MOVED" },
+      { customerCode: "1003", serviceNumber: "0449999999", provider: "3BB", name: "ศูนย์รัตนบุรี", normalAmount: "631.30", dueDay: 31, status: "CLOSED" },
     ]);
   });
 
@@ -27,6 +27,12 @@ describe("parseCentersCsv", () => {
     expect(errors).toEqual([]);
     expect(rows[0].customerCode).toBe("1001");
     expect(rows[0].name).toBe("ศูนย์ท่าตูม");
+  });
+
+  it("คอลัมน์ระบบ (ค่าย): ไม่มีคอลัมน์/ว่าง = 3BB, ตัวพิมพ์ใหญ่", () => {
+    const { rows, errors } = parseCentersCsv(["รหัสลูกค้า,ระบบ,ชื่อศูนย์,ยอดปกติ,วันครบกำหนด", "1001,true,ศูนย์ ก,749,5", "1002,,ศูนย์ ข,749,5"].join("\n"));
+    expect(errors).toEqual([]);
+    expect(rows.map((r) => r.provider)).toEqual(["TRUE", "3BB"]);
   });
 
   it("สถานะว่าง ถือเป็น ใช้งาน", () => {

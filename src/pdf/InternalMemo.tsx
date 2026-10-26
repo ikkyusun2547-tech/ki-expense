@@ -10,8 +10,8 @@ import { thaiPdfText } from "@/lib/pdf/thaiText";
 const LINE = { borderColor: "#000", borderStyle: "solid" as const };
 const RIGHT = { ...LINE, borderRightWidth: 1 };
 
-// ขนาดตัวอักษร (pt) — ปรับที่นี่ที่เดียว
-const SIZE = { base: 11, title: 18, pageNo: 9.5, company: 11.5, table: 10.5, formCode: 8.5 };
+// ขนาดตัวอักษร (pt) — ปรับที่นี่ที่เดียว (2026-10-26 ผู้ใช้ขอเล็กลงเล็กน้อยให้ดูสบายตา: เดิม base 11)
+const SIZE = { base: 10, title: 16.5, pageNo: 8.5, company: 10.5, table: 9.5, formCode: 7.5 };
 const INDENT = 36;
 
 // ความกว้างคอลัมน์ (pt) — คอลัมน์สุดท้ายของแต่ละแถวยืดเต็มที่เหลือ
@@ -106,7 +106,7 @@ export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | 
           <T style={styles.intro}>{data.intro}</T>
 
           <View style={styles.table}>
-            {/* หัวตาราง 2 ชั้น: [ชื่อตาราง / ลำดับ รหัสลูกค้า|หมายเลขโทรศัพท์ ระบบ ผู้ใช้บริการ] [จำนวน] [เดือน / กำหนดชำระ] */}
+            {/* หัวตาราง 2 ชั้น (ตามฟอร์มจริง): [ชื่อตาราง / ลำดับ รหัสลูกค้า|หมายเลขโทรศัพท์ ระบบ ผู้ใช้บริการ] [เดือน / จำนวน กำหนดชำระ] */}
             <View style={styles.row}>
               <View style={{ width: COL_LEFT }}>
                 <T style={[styles.tCell, styles.bold, RIGHT, { borderBottomWidth: 1 }]}>{data.tableTitle}</T>
@@ -117,12 +117,12 @@ export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | 
                   <T style={[styles.tCell, styles.bold, RIGHT, { width: COL.user }]}>ผู้ใช้บริการ</T>
                 </View>
               </View>
-              <View style={[styles.tCell, RIGHT, { width: COL.amount, justifyContent: "flex-end" }]}>
-                <T style={styles.bold}>จำนวน</T>
-              </View>
               <View style={styles.grow}>
                 <T style={[styles.tCell, styles.bold, { ...LINE, borderBottomWidth: 1 }]}>{data.monthHeader}</T>
-                <T style={[styles.tCell, styles.bold]}>กำหนดชำระ</T>
+                <View style={styles.row}>
+                  <T style={[styles.tCell, styles.bold, RIGHT, { width: COL.amount }]}>จำนวน</T>
+                  <T style={[styles.tCell, styles.bold, styles.grow]}>กำหนดชำระ</T>
+                </View>
               </View>
             </View>
 

@@ -50,6 +50,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
             { customerCode: { contains: q, mode: "insensitive" } },
             { name: { contains: q, mode: "insensitive" } },
             { serviceNumber: { contains: q, mode: "insensitive" } },
+            { provider: { contains: q, mode: "insensitive" } },
           ],
         }),
       },
@@ -120,6 +121,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
           <thead>
             <tr>
               <th className={thClass}>ศูนย์ / รหัสลูกค้า</th>
+              <th className={thClass}>ระบบ</th>
               <th className={thClass}>หมายเลขบริการ</th>
               <th className={`${thClass} text-right`}>ยอดปกติ (บาท)</th>
               <th className={`${thClass} text-center`}>ครบกำหนดทุกวันที่</th>
@@ -134,6 +136,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
                 <td className={tdClass}>
                   <NameCell name={c.name} code={c.customerCode} href={`/admin/centers/${c.id}`} />
                 </td>
+                <td className={tdClass}>{c.provider || "–"}</td>
                 <td className={`${tdClass} tabular-nums text-slate-500`}>{c.serviceNumber ?? "–"}</td>
                 <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(c.normalAmount)}</td>
                 <td className={`${tdClass} text-center tabular-nums`}>{c.dueDay}</td>
@@ -147,7 +150,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
               </tr>
             ))}
             {centers.length === 0 && (
-              <EmptyRow colSpan={7} icon={Inbox}>
+              <EmptyRow colSpan={8} icon={Inbox}>
                 {q || status ? "ไม่พบศูนย์ที่ตรงกับการค้นหา" : 'ยังไม่มีศูนย์ในทะเบียน — กด "เพิ่มศูนย์" เพื่อเริ่ม'}
               </EmptyRow>
             )}

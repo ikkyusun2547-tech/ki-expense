@@ -44,6 +44,7 @@ const dueDay = z.coerce
 export const centerSchema = z.object({
   customerCode: requiredText("รหัสลูกค้า", 50),
   serviceNumber: optionalText(50),
+  provider: requiredText("ระบบ", 30).transform((s) => s.toUpperCase()),
   name: requiredText("ชื่อศูนย์", 200),
   normalAmount,
   dueDay,
