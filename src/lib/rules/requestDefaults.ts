@@ -5,6 +5,7 @@ import { addDays, type ISODate } from "@/lib/thai/date";
 // - ยอด = ยอดปกติของศูนย์
 // - มีใบเบิกก่อนหน้า → รอบบริการต่อจากใบล่าสุด 1 เดือน, ครบกำหนด = วันครบกำหนดของศูนย์ในเดือนถัดจากใบล่าสุด
 // - ยังไม่เคยเบิก → เว้นรอบบริการให้กรอกเอง, ครบกำหนด = วันครบกำหนดของศูนย์ในเดือนนี้
+//   ถ้าวันนั้นผ่านไปแล้ว → เดือนถัดไป (บิลที่เพิ่งได้มามักยังไม่ถึงกำหนด — ผู้ใช้เลือก 2026-10-26)
 
 export type RequestSuggestion = {
   amount: string;
@@ -33,7 +34,9 @@ export function suggestRequest(
 ): RequestSuggestion {
   if (!last) {
     const [y, m] = ymd(today);
-    return { amount: center.normalAmount, periodStart: "", periodEnd: "", dueDate: dueDateInMonth(y, m, center.dueDay) };
+    const thisMonth = dueDateInMonth(y, m, center.dueDay);
+    const dueDate = thisMonth < today ? dueDateInMonth(...nextMonth(y, m), center.dueDay) : thisMonth;
+    return { amount: center.normalAmount, periodStart: "", periodEnd: "", dueDate };
   }
   const [dy, dm] = ymd(last.dueDate);
   const [ny, nm] = nextMonth(dy, dm);

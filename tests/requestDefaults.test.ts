@@ -39,7 +39,14 @@ describe("suggestRequest", () => {
     expect(suggestRequest(center, { periodEnd: "2026-11-30", dueDate: "2026-12-12" }, "2026-12-20").dueDate).toBe("2027-01-12");
   });
 
-  it("ยังไม่เคยเบิก: เว้นรอบบริการ, ครบกำหนด = วันที่ของศูนย์ในเดือนนี้", () => {
-    expect(suggestRequest(center, null, "2026-10-24")).toEqual({ amount: "749.00", periodStart: "", periodEnd: "", dueDate: "2026-10-12" });
+  it("ยังไม่เคยเบิก: เว้นรอบบริการ, ครบกำหนด = วันที่ของศูนย์ในเดือนนี้ (ถ้ายังไม่ผ่าน)", () => {
+    expect(suggestRequest(center, null, "2026-10-05")).toEqual({ amount: "749.00", periodStart: "", periodEnd: "", dueDate: "2026-10-12" });
+    expect(suggestRequest(center, null, "2026-10-12").dueDate).toBe("2026-10-12"); // วันนี้ครบกำหนดพอดี
+  });
+
+  it("ยังไม่เคยเบิก และวันครบกำหนดเดือนนี้ผ่านไปแล้ว → เดือนถัดไป (ข้ามปีได้)", () => {
+    expect(suggestRequest(center, null, "2026-10-24")).toEqual({ amount: "749.00", periodStart: "", periodEnd: "", dueDate: "2026-11-12" });
+    expect(suggestRequest(center, null, "2026-12-20").dueDate).toBe("2027-01-12");
+    expect(suggestRequest({ normalAmount: "1", dueDay: 31 }, null, "2027-01-31").dueDate).toBe("2027-01-31");
   });
 });
