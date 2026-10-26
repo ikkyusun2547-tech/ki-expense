@@ -18,6 +18,23 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
+describe("จดจำฉัน", () => {
+  const hoursLeft = async (userId: string) => {
+    const s = await db.session.findFirstOrThrow({ where: { userId }, orderBy: { createdAt: "desc" } });
+    return (s.expiresAt.getTime() - Date.now()) / 3_600_000;
+  };
+
+  it("ไม่ติ๊ก = 12 ชั่วโมง; ติ๊ก = 30 วัน (cookie หมดอายุตรงกัน)", async () => {
+    const u = await createTestUser("remember", "ACCOUNTING");
+    await run(() => login(initialFormState, form({ username: `${PREFIX}remember`, password: PASSWORD })));
+    expect(await hoursLeft(u.id)).toBeCloseTo(12, 0);
+
+    cookieJar.clear();
+    await run(() => login(initialFormState, form({ username: `${PREFIX}remember`, password: PASSWORD, remember: "on" })));
+    expect(await hoursLeft(u.id)).toBeCloseTo(30 * 24, 0);
+  });
+});
+
 describe("ล็อกอิน", () => {
   it("รหัสถูก → ได้ cookie session และไปหน้าของบทบาท", async () => {
     await createTestUser("creator", "CREATOR");

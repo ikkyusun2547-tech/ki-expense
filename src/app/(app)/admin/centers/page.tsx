@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Building, CircleCheck, CircleX, Inbox, Plus } from "lucide-react";
+import { ArrowRightLeft, Building, CircleCheck, CircleX, Inbox, Plus, Upload } from "lucide-react";
 import type { CenterStatus } from "@/generated/prisma/enums";
 import { CenterStatusBadge } from "@/components/StatusBadge";
 import {
@@ -68,9 +68,14 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
         title="ทะเบียนศูนย์"
         description={`ทั้งหมด ${total} ศูนย์`}
         actions={
-          <ButtonLink href="/admin/centers/new" icon={Plus}>
-            เพิ่มศูนย์
-          </ButtonLink>
+          <div className="flex gap-2">
+            <ButtonLink href="/admin/centers/import" variant="secondary" icon={Upload}>
+              นำเข้าจากไฟล์
+            </ButtonLink>
+            <ButtonLink href="/admin/centers/new" icon={Plus}>
+              เพิ่มศูนย์
+            </ButtonLink>
+          </div>
         }
       />
 

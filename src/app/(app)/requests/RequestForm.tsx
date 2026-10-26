@@ -7,7 +7,7 @@ import { ThaiDateInput } from "@/components/ThaiDateInput";
 import type { ApproverOption } from "@/server/services/approvers";
 import { Alert, Button, ButtonLink, cx, Field, inputClass, StepTitle } from "@/components/ui";
 import { ACCEPT_ATTR, MAX_UPLOAD_LABEL } from "@/lib/files";
-import { formatAmount } from "@/lib/money";
+import { formatAmount, parseAmount, toSatang } from "@/lib/money";
 import type { MemoTexts } from "@/lib/pdf/memoData";
 import type { RequestSuggestion } from "@/lib/rules/requestDefaults";
 import { daysInclusive, formatThaiDate, isISODate } from "@/lib/thai/date";
@@ -84,6 +84,9 @@ export function RequestForm(props: Props) {
     formRef.current?.requestSubmit();
   }
 
+  const typedAmount = center ? parseAmount(values.amount) : null;
+  const amountDiffers = !!center && typedAmount !== null && toSatang(typedAmount) !== toSatang(center.normalAmount);
+
   const showResult = !resultStale && !saving;
   const blocks = showResult ? (state.blocks ?? []) : [];
   const warnings = showResult ? (state.warnings ?? []) : [];
@@ -139,8 +142,12 @@ export function RequestForm(props: Props) {
           <Field label="เลขที่ใบแจ้งหนี้" htmlFor="invoiceNo">
             <input id="invoiceNo" name="invoiceNo" value={values.invoiceNo} onChange={update("invoiceNo")} required maxLength={50} className={`${inputClass} tabular-nums`} />
           </Field>
-          <Field label="ยอดตามใบแจ้งหนี้ (บาท)" htmlFor="amount" hint={`ยอดปกติ ${formatAmount(center.normalAmount)} บาท`}>
+          <Field label="ยอดตามใบแจ้งหนี้ (บาท)" htmlFor="amount" hint={amountDiffers ? undefined : `ยอดปกติ ${formatAmount(center.normalAmount)} บาท`}>
             <input id="amount" name="amount" inputMode="decimal" value={values.amount} onChange={update("amount")} required placeholder="0.00" className={`${inputClass} tabular-nums`} />
+            {/* ยอดต่างจากปกติ: แจ้งทันทีตอนพิมพ์ ไม่ต้องกดยืนยันซ้ำตอนบันทึก */}
+            {amountDiffers && (
+              <p className="text-xs font-medium text-amber-700">ต่างจากยอดปกติ {formatAmount(center.normalAmount)} บาท — ตรวจให้ตรงใบแจ้งหนี้</p>
+            )}
           </Field>
           <Field label="รอบบริการ เริ่ม" htmlFor="periodStart" hint={thaiHint(values.periodStart)}>
             <ThaiDateInput id="periodStart" name="periodStart" value={values.periodStart} onChange={updateDate("periodStart")} required />

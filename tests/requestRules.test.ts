@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkRequest, type CenterForRules, type RequestDraft } from "@/lib/rules/requestRules";
+import { checkRequest, needsConfirm, type CenterForRules, type RequestDraft } from "@/lib/rules/requestRules";
 
 const center: CenterForRules = { status: "ACTIVE", normalAmount: "749.00" };
 
@@ -113,5 +113,15 @@ describe("checkRequest", () => {
     );
     expect(codes(result.blocks)).toEqual(["CENTER_INACTIVE", "PERIOD_OVERLAP"]);
     expect(codes(result.warnings)).toEqual(["PERIOD_LENGTH", "AMOUNT_DIFFERS", "NO_FILE"]);
+  });
+});
+
+describe("needsConfirm", () => {
+  it("ยอดต่างจากปกติอย่างเดียว ไม่ต้องกดยืนยันซ้ำ; คำเตือนอื่นยังต้องยืนยัน", () => {
+    const amount = { code: "AMOUNT_DIFFERS" as const, message: "" };
+    const noFile = { code: "NO_FILE" as const, message: "" };
+    expect(needsConfirm([])).toBe(false);
+    expect(needsConfirm([amount])).toBe(false);
+    expect(needsConfirm([amount, noFile])).toBe(true);
   });
 });

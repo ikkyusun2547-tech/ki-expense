@@ -48,6 +48,13 @@ describe("สร้างใบเบิก", () => {
     expect(readFileSync(invoiceFilePath(r.invoiceFileKey!))).toEqual(Buffer.from(PDF));
   });
 
+  it("ยอดต่างจากปกติอย่างเดียว → บันทึกได้เลย ไม่ต้องกดยืนยันซ้ำ", async () => {
+    const c = await center();
+    await loginAs("CREATOR");
+    const id = idFrom(await save(valid(c.id, { amount: "812.50" })));
+    expect((await db.request.findUniqueOrThrow({ where: { id } })).amount.toFixed(2)).toBe("812.50");
+  });
+
   it("มีคำเตือน → ยังไม่บันทึกจนกว่าจะยืนยัน", async () => {
     const c = await center();
     await loginAs("CREATOR");

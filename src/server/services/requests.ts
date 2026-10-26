@@ -3,7 +3,7 @@ import type { Role } from "@/generated/prisma/enums";
 import { toAmountString } from "@/lib/money";
 import { DEFAULT_MEMO_TEXTS, type MemoTexts } from "@/lib/pdf/memoData";
 import { checkPayment, type PaymentInput } from "@/lib/rules/paymentRules";
-import { checkRequest, type Issue, type RequestDraft } from "@/lib/rules/requestRules";
+import { checkRequest, needsConfirm, type Issue, type RequestDraft } from "@/lib/rules/requestRules";
 import { checkSignerChange, checkTransition, isAssignedApprover, type RequestAction } from "@/lib/status";
 import { formatThaiDate, fromISODate, toISODate, type ISODate } from "@/lib/thai/date";
 import type { CurrentUser } from "@/server/auth";
@@ -72,7 +72,7 @@ async function validate(args: {
     blocks.push({ code: "MISSING_FIELD", message: `เลขที่ใบแจ้งหนี้ยาวเกิน ${MAX_INVOICE_NO} ตัวอักษร` });
   }
 
-  if (blocks.length || (warnings.length && !args.confirmWarnings)) return { ok: false, blocks, warnings };
+  if (blocks.length || (needsConfirm(warnings) && !args.confirmWarnings)) return { ok: false, blocks, warnings };
   return { ok: true };
 }
 

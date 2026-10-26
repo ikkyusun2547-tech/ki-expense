@@ -9,7 +9,7 @@ import { changePasswordSchema, fieldErrorsOf } from "@/lib/validation";
 import { requireUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { hashPassword, verifyPassword } from "@/server/password";
-import { createSession, destroySession, destroyUserSessions } from "@/server/session";
+import { createSession, destroySession, destroyUserSessions, readSession } from "@/server/session";
 
 // hash หลอก ใช้ตรวจเมื่อไม่พบชื่อผู้ใช้ เพื่อให้เวลาตอบสนองใกล้เคียงกรณีพบ (กันเดาชื่อผู้ใช้จากเวลา)
 let dummyHash: Promise<string> | undefined;
@@ -49,7 +49,7 @@ export async function login(_prev: FormState, formData: FormData): Promise<FormS
 
   if (!success || !user) return { error: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", values };
 
-  await createSession(user.id);
+  await createSession(user.id, { remember: formData.get("remember") === "on" });
   redirect(user.mustChangePassword ? "/change-password" : HOME_PATH[user.role]);
 }
 
@@ -78,8 +78,9 @@ export async function changePassword(_prev: FormState, formData: FormData): Prom
     data: { passwordHash: await hashPassword(parsed.data.newPassword), mustChangePassword: false },
   });
 
-  // ออกจากทุกเครื่อง แล้วเปิด session ใหม่ให้เครื่องนี้
+  // ออกจากทุกเครื่อง แล้วเปิด session ใหม่ให้เครื่องนี้ (คงแบบ "จดจำฉัน" ถ้า session เดิมเป็นแบบนั้น)
+  const remember = ((await readSession())?.expiresAt.getTime() ?? 0) > Date.now() + 24 * 60 * 60 * 1000;
   await destroyUserSessions(user.id);
-  await createSession(user.id);
+  await createSession(user.id, { remember });
   redirect(HOME_PATH[user.role]);
 }

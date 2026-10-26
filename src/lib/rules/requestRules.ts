@@ -132,3 +132,12 @@ export function checkRequest(
 
   return { blocks, warnings };
 }
+
+// คำเตือนที่ไม่ต้องกดยืนยันซ้ำ (ผู้ใช้ขอ 2026-10-26 — ยอดเปลี่ยนทุกเดือนเป็นเรื่องปกติ)
+// ยังแสดงในหน้าจอ (ใต้ช่องยอด / หน้าใบเบิก) แต่บันทึกได้เลย
+const INFO_ONLY: readonly IssueCode[] = ["AMOUNT_DIFFERS"];
+
+// มีคำเตือนที่ต้องให้ผู้ใช้ตรวจแล้วกดยืนยันก่อนบันทึกไหม
+export function needsConfirm(warnings: readonly Issue[]): boolean {
+  return warnings.some((w) => !INFO_ONLY.includes(w.code));
+}

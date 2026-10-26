@@ -170,8 +170,7 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
               <tr>
                 {canPay && <th className={`${thClass} w-10`} />}
                 <th className={thClass}>ครบกำหนด</th>
-                <th className={thClass}>ศูนย์ / รอบบริการ</th>
-                <th className={thClass}>ใบแจ้งหนี้</th>
+                <th className={thClass}>ศูนย์ / ใบแจ้งหนี้</th>
                 <th className={`${thClass} text-right`}>ยอด (บาท)</th>
                 <th className={thClass} />
               </tr>
@@ -194,23 +193,22 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                     </td>
                     <td className={tdClass}>
                       <NameCell name={r.center.name} code={r.center.customerCode} href={`/requests/${r.id}`} />
+                      {/* รอบบริการ + เลขที่ใบแจ้งหนี้ + ไฟล์ อยู่ใต้ชื่อศูนย์ เพื่อเหลือที่ให้ช่องบันทึกจ่ายในแถว */}
                       <div className="mt-1 whitespace-nowrap text-xs text-slate-500">
                         {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
                       </div>
-                    </td>
-                    <td className={`${tdClass} whitespace-nowrap`}>
-                      <div className="tabular-nums">{r.invoiceNo}</div>
-                      <div className="mt-1 text-xs">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+                        <span className="tabular-nums">{r.invoiceNo}</span>
                         <FileLink row={r} />
                       </div>
                     </td>
                     <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(r.amount)}</td>
-                    <td className={`${tdClass} w-64`}>{canPay ? <PayAction row={r} today={today} /> : <span className="text-slate-300">–</span>}</td>
+                    <td className={`${tdClass} min-w-[25rem]`}>{canPay ? <PayAction row={r} today={today} /> : <span className="text-slate-300">–</span>}</td>
                   </tr>
                 );
               })}
               {rows.length === 0 && (
-                <EmptyRow colSpan={6} icon={Inbox}>
+                <EmptyRow colSpan={5} icon={Inbox}>
                   ไม่มีใบเบิกที่รอจ่าย
                 </EmptyRow>
               )}
@@ -236,20 +234,9 @@ function FileLink({ row }: { row: PendingRow }) {
   );
 }
 
-// ปุ่มบันทึกการจ่ายทีละใบ (กดแล้วกางฟอร์มวันที่จ่าย + เลขอ้างอิง)
+// บันทึกการจ่ายทีละใบในแถวเลย: วันที่จ่าย (ค่าเริ่มต้นวันนี้) + เลขอ้างอิง + ปุ่มบันทึก
 function PayAction({ row, today, suffix }: { row: PendingRow; today: string; suffix?: string }) {
-  return (
-    <details className="group">
-      <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-emerald-800 group-open:bg-slate-100 group-open:text-slate-700 group-open:shadow-none">
-        <Banknote className="size-3.5" aria-hidden />
-        <span className="group-open:hidden">บันทึกการจ่าย</span>
-        <span className="hidden group-open:inline">ปิด</span>
-      </summary>
-      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <PayForm id={row.id} today={today} returnTo="list" suffix={suffix} />
-      </div>
-    </details>
-  );
+  return <PayForm id={row.id} today={today} returnTo="list" suffix={suffix} compact />;
 }
 
 // 12 เดือนล่าสุด (นับจากเดือนนี้) สำหรับเลือกเดือนที่จะดาวน์โหลด — "YYYY-MM"

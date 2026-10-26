@@ -9,6 +9,8 @@ import { db } from "./db";
 // ถ้า DB รั่ว ก็เอา hash ไปปลอม cookie ไม่ได้; ลบแถวใน DB = บังคับออกจากระบบทันที
 
 const SESSION_HOURS = 12;
+// "จดจำฉัน" ตอนล็อกอิน (ผู้ใช้ขอ 2026-10-26: ไม่ต้องพิมพ์รหัสทุกวัน) — เครื่องส่วนตัวเท่านั้น
+export const REMEMBER_DAYS = 30;
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
@@ -19,9 +21,10 @@ function cookieSecure(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
-export async function createSession(userId: string): Promise<void> {
+export async function createSession(userId: string, options: { remember?: boolean } = {}): Promise<void> {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + SESSION_HOURS * 60 * 60 * 1000);
+  const hours = options.remember ? REMEMBER_DAYS * 24 : SESSION_HOURS;
+  const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000);
 
   await db.session.deleteMany({ where: { userId, expiresAt: { lt: new Date() } } });
   await db.session.create({ data: { tokenHash: hashToken(token), userId, expiresAt } });

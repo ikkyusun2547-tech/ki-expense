@@ -105,12 +105,10 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                   <tr>
                     {isApprover && <th className={`${thClass} w-10`} />}
                     <th className={thClass}>ครบกำหนด</th>
-                    <th className={thClass}>ศูนย์</th>
-                    <th className={thClass}>รอบบริการ</th>
+                    <th className={thClass}>ศูนย์ / รอบบริการ</th>
                     <th className={`${thClass} text-right`}>ยอด (บาท)</th>
                     <th className={thClass}>ผู้ขออนุมัติ</th>
                     {!isApprover && <th className={thClass}>ผู้อนุมัติ</th>}
-                    <th className={thClass}>ใบแจ้งหนี้</th>
                     <th className={thClass} />
                   </tr>
                 </thead>
@@ -130,32 +128,33 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                             <DueBadge daysLeft={daysUntil(today, due)} />
                           </div>
                         </td>
+                        {/* รอบบริการ + ไฟล์อยู่ใต้ชื่อศูนย์ เพื่อเหลือที่ให้ปุ่มอนุมัติ/ไม่อนุมัติ */}
                         <td className={tdClass}>
                           <NameCell name={r.center.name} code={r.center.customerCode} href={`/requests/${r.id}`} />
-                        </td>
-                        <td className={`${tdClass} whitespace-nowrap`}>
-                          {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
+                            <span className="whitespace-nowrap">
+                              {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
+                            </span>
+                            {r.invoiceFileKey ? (
+                              <a
+                                href={`/api/requests/${r.id}/invoice`}
+                                target="_blank"
+                                rel="noopener"
+                                className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-emerald-700 hover:underline"
+                              >
+                                <Paperclip className="size-3" aria-hidden /> เปิดไฟล์
+                              </a>
+                            ) : (
+                              <span className="text-amber-700">ไม่มีไฟล์</span>
+                            )}
+                          </div>
                         </td>
                         <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(r.amount)}</td>
                         <td className={tdClass}>{r.requesterName ?? r.createdBy.name}</td>
                         {!isApprover && <td className={tdClass}>{r.approverName}</td>}
-                        <td className={tdClass}>
-                          {r.invoiceFileKey ? (
-                            <a
-                              href={`/api/requests/${r.id}/invoice`}
-                              target="_blank"
-                              rel="noopener"
-                              className="inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline"
-                            >
-                              <Paperclip className="size-3.5" aria-hidden /> เปิดไฟล์
-                            </a>
-                          ) : (
-                            <span className="text-xs text-amber-700">ไม่มีไฟล์</span>
-                          )}
-                        </td>
                         <td className={`${tdClass} text-right`}>
                           <div className="flex items-start justify-end gap-1">
-                            <RowLink href={`/requests/${r.id}`}>{isApprover ? "ดู / ไม่อนุมัติ" : "ดู"}</RowLink>
+                            <RowLink href={`/requests/${r.id}`}>ดู</RowLink>
                             {isApprover && <ApproveButton id={r.id} />}
                           </div>
                         </td>
@@ -163,7 +162,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                     );
                   })}
                   {pending.length === 0 && (
-                    <EmptyRow colSpan={8} icon={Inbox}>
+                    <EmptyRow colSpan={7} icon={Inbox}>
                       ไม่มีใบเบิกที่รออนุมัติ
                     </EmptyRow>
                   )}
@@ -247,7 +246,7 @@ function PendingCards({ rows, today, isApprover }: { rows: PendingRow[]; today: 
               ) : (
                 <span className="mr-auto text-xs text-amber-700">ไม่มีไฟล์</span>
               )}
-              <RowLink href={`/requests/${r.id}`}>{isApprover ? "ดู / ไม่อนุมัติ" : "ดู"}</RowLink>
+              <RowLink href={`/requests/${r.id}`}>ดู</RowLink>
               {isApprover && <ApproveButton id={r.id} />}
             </div>
           </li>
