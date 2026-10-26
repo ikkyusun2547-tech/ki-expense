@@ -13,6 +13,8 @@ export function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
+// ไม่ผ่านด่านนี้: ไฟล์ของ Next และรูปใน public/ (โลโก้ — ไม่ใช่ข้อมูลลับ; ตัวย่อรูป /_next/image ดึงไฟล์โดยไม่แนบ cookie)
+// ไฟล์ใบแจ้งหนี้ไม่อยู่ใน public/ — ดาวน์โหลดผ่าน /api/requests/[id]/invoice ที่ตรวจสิทธิ์เสมอ
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|fonts/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|fonts/|[^/]+\\.(?:png|jpg|jpeg|svg|webp)$).*)"],
 };

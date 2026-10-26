@@ -1,14 +1,15 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
-import { Check, CircleAlert, Paperclip, Search, Send, Sparkles, TriangleAlert } from "lucide-react";
+import { Check, ChevronDown, CircleAlert, Paperclip, Search, Send, Sparkles, TriangleAlert, X } from "lucide-react";
 import { CenterStatusBadge } from "@/components/StatusBadge";
 import { ThaiDateInput } from "@/components/ThaiDateInput";
 import type { ApproverOption, MemoTextsByKind } from "@/server/services/approvers";
-import { Alert, Badge, Button, ButtonLink, cx, Field, inputClass, StepTitle } from "@/components/ui";
+import { Alert, Badge, Button, ButtonLink, cx, Field, inputClass, Select, StepTitle } from "@/components/ui";
 import { formatPhone } from "@/lib/centers/phone";
 import { ACCEPT_ATTR, MAX_UPLOAD_LABEL } from "@/lib/files";
 import { formatAmount, parseAmount, toSatang } from "@/lib/money";
+import { phoneCharges, VAT_PERCENT, type PhoneCharges } from "@/lib/rules/phoneCharges";
 import type { RequestSuggestion } from "@/lib/rules/requestDefaults";
 import { daysInclusive, formatThaiDate, isISODate } from "@/lib/thai/date";
 import { findCenterByCode, saveRequest, type CenterSummary, type RequestFormState } from "@/server/actions/requests";
@@ -16,6 +17,8 @@ import { findCenterByCode, saveRequest, type CenterSummary, type RequestFormStat
 export type RequestFormValues = {
   invoiceNo: string;
   amount: string;
+  packageAmount: string; // ค่าโทรศัพท์ (ก่อน VAT) — ค่าอินเทอร์เน็ตไม่ใช้
+  extraAmount: string;
   periodStart: string;
   periodEnd: string;
   dueDate: string;
@@ -40,7 +43,7 @@ type Props = SignerProps & (
 
 type Intent = "submit" | "save";
 
-const EMPTY: RequestFormValues = { invoiceNo: "", amount: "", periodStart: "", periodEnd: "", dueDate: "" };
+const EMPTY: RequestFormValues = { invoiceNo: "", amount: "", packageAmount: "", extraAmount: "", periodStart: "", periodEnd: "", dueDate: "" };
 
 export function RequestForm(props: Props) {
   const [state, formAction, saving] = useActionState<RequestFormState, FormData>(saveRequest, {});
@@ -84,7 +87,10 @@ export function RequestForm(props: Props) {
     formRef.current?.requestSubmit();
   }
 
-  const typedAmount = center ? parseAmount(values.amount) : null;
+  // ค่าโทรศัพท์: ยอดเบิก = แพ็กเกจหลัก + เสริม/ส่วนเกิน + VAT 7% (เซิร์ฟเวอร์คิดซ้ำเอง)
+  const isPhone = center?.kind === "PHONE";
+  const charges = isPhone ? phoneCharges(values.packageAmount, values.extraAmount) : null;
+  const typedAmount = !center ? null : isPhone ? (charges?.total ?? null) : parseAmount(values.amount);
   const amountDiffers = !!center && typedAmount !== null && toSatang(typedAmount) !== toSatang(center.normalAmount);
 
   // ประเภทใบเบิกตามที่ค้นเจอ (ศูนย์ = ค่าอินเทอร์เน็ต / เบอร์ = ค่าโทรศัพท์)
@@ -150,13 +156,42 @@ export function RequestForm(props: Props) {
           <Field label="เลขที่ใบแจ้งหนี้" htmlFor="invoiceNo">
             <input id="invoiceNo" name="invoiceNo" value={values.invoiceNo} onChange={update("invoiceNo")} required maxLength={50} className={`${inputClass} tabular-nums`} />
           </Field>
-          <Field label="ยอดตามใบแจ้งหนี้ (บาท)" htmlFor="amount" hint={amountDiffers ? undefined : `ยอดปกติ ${formatAmount(center.normalAmount)} บาท`}>
-            <input id="amount" name="amount" inputMode="decimal" value={values.amount} onChange={update("amount")} required placeholder="0.00" className={`${inputClass} tabular-nums`} />
-            {/* ยอดต่างจากปกติ: แจ้งทันทีตอนพิมพ์ ไม่ต้องกดยืนยันซ้ำตอนบันทึก */}
-            {amountDiffers && (
-              <p className="text-xs font-medium text-amber-700">ต่างจากยอดปกติ {formatAmount(center.normalAmount)} บาท — ตรวจให้ตรงใบแจ้งหนี้</p>
-            )}
-          </Field>
+          {isPhone ? (
+            <>
+              <Field label="ค่าบริการแพ็กเกจหลัก (บาท)" htmlFor="packageAmount" hint="ก่อนภาษีมูลค่าเพิ่ม ตามบิล">
+                <input
+                  id="packageAmount"
+                  name="packageAmount"
+                  inputMode="decimal"
+                  value={values.packageAmount}
+                  onChange={update("packageAmount")}
+                  required
+                  placeholder="0.00"
+                  className={`${inputClass} tabular-nums`}
+                />
+              </Field>
+              <Field label="ค่าแพ็กเกจเสริมและค่าบริการส่วนเกิน (บาท)" htmlFor="extraAmount" hint="ก่อนภาษีมูลค่าเพิ่ม · ไม่มี = 0">
+                <input
+                  id="extraAmount"
+                  name="extraAmount"
+                  inputMode="decimal"
+                  value={values.extraAmount}
+                  onChange={update("extraAmount")}
+                  placeholder="0.00"
+                  className={`${inputClass} tabular-nums`}
+                />
+              </Field>
+              <PhoneChargesBox charges={charges} normalAmount={center.normalAmount} differs={amountDiffers} />
+            </>
+          ) : (
+            <Field label="ยอดตามใบแจ้งหนี้ (บาท)" htmlFor="amount" hint={amountDiffers ? undefined : `ยอดปกติ ${formatAmount(center.normalAmount)} บาท`}>
+              <input id="amount" name="amount" inputMode="decimal" value={values.amount} onChange={update("amount")} required placeholder="0.00" className={`${inputClass} tabular-nums`} />
+              {/* ยอดต่างจากปกติ: แจ้งทันทีตอนพิมพ์ ไม่ต้องกดยืนยันซ้ำตอนบันทึก */}
+              {amountDiffers && (
+                <p className="text-xs font-medium text-amber-700">ต่างจากยอดปกติ {formatAmount(center.normalAmount)} บาท — ตรวจให้ตรงใบแจ้งหนี้</p>
+              )}
+            </Field>
+          )}
           <Field label="รอบบริการ เริ่ม" htmlFor="periodStart" hint={thaiHint(values.periodStart)}>
             <ThaiDateInput id="periodStart" name="periodStart" value={values.periodStart} onChange={updateDate("periodStart")} required />
           </Field>
@@ -182,8 +217,8 @@ export function RequestForm(props: Props) {
             <label
               htmlFor="invoiceFile"
               className={cx(
-                "flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 text-sm transition hover:border-emerald-500 hover:bg-emerald-50/50 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-emerald-600/10",
-                fileName ? "border-emerald-400 bg-emerald-50/50 text-emerald-800" : "border-slate-300 bg-slate-50 text-slate-500",
+                "flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-dashed px-3 text-sm transition hover:border-brand-500 hover:bg-brand-50/50 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand-600/10",
+                fileName ? "border-brand-400 bg-brand-50/50 text-brand-800" : "border-slate-300 bg-slate-50 text-slate-500",
               )}
             >
               <Paperclip className="size-4 shrink-0" aria-hidden />
@@ -231,7 +266,9 @@ export function RequestForm(props: Props) {
                   <span className="font-medium text-slate-800">ข้อความบนใบเบิก</span> — จาก: {texts.department} · เรียน:{" "}
                   {texts.recipient} · เพื่อ: {texts.purpose}
                 </span>
-                <span className="shrink-0 font-medium text-emerald-700 group-open:hidden">แก้ไข ▾</span>
+                <span className="inline-flex shrink-0 items-center gap-1 font-medium text-brand-700 group-open:hidden">
+                  แก้ไข <ChevronDown className="size-4" aria-hidden />
+                </span>
               </summary>
               <div className="grid gap-4 border-t border-slate-100 p-4 sm:grid-cols-2">
                 <Field label="จาก (ชื่อฝ่าย)" htmlFor="department" hint="ใช้ในย่อหน้า “... ขอเบิกค่าใช้บริการ” ด้วย">
@@ -295,7 +332,7 @@ export function RequestForm(props: Props) {
                 </Button>
               </>
             )}
-            <ButtonLink href={props.mode === "edit" ? `/requests/${props.id}` : "/summary"} variant="ghost">
+            <ButtonLink href={props.mode === "edit" ? `/requests/${props.id}` : "/summary"} variant="secondary" icon={X}>
               ยกเลิก
             </ButtonLink>
           </div>
@@ -305,6 +342,25 @@ export function RequestForm(props: Props) {
           <StepTitle step={2} title="ข้อมูลตามใบแจ้งหนี้" hint="ค้นหาศูนย์หรือเบอร์ให้เจอก่อน" />
         </div>
       )}
+    </div>
+  );
+}
+
+// ยอดแยกแบบในบิล (รวมก่อน VAT / VAT 7% / รวมทั้งสิ้น) — ให้เทียบกับบิลได้ทันทีตอนกรอก
+function PhoneChargesBox({ charges, normalAmount, differs }: { charges: PhoneCharges | null; normalAmount: string; differs: boolean }) {
+  const row = (label: string, value: string | undefined, strong = false) => (
+    <div className={cx("flex justify-between gap-4", strong && "border-t border-slate-200 pt-1.5 font-semibold text-slate-900")}>
+      <span>{label}</span>
+      <span className="tabular-nums">{value ? formatAmount(value) : "–"}</span>
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-1 self-start rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+      {row("รวมค่าบริการก่อนภาษีมูลค่าเพิ่ม", charges?.subtotal)}
+      {row(`ภาษีมูลค่าเพิ่ม ${VAT_PERCENT}%`, charges?.vat)}
+      {row("รวมทั้งสิ้น (ยอดเบิก)", charges?.total, true)}
+      {!charges && <p className="text-xs text-red-700">กรอกยอดเป็นตัวเลข ทศนิยมไม่เกิน 2 ตำแหน่ง</p>}
+      {differs && <p className="text-xs font-medium text-amber-700">ต่างจากยอดปกติ {formatAmount(normalAmount)} บาท — ตรวจให้ตรงบิล</p>}
     </div>
   );
 }
@@ -376,7 +432,7 @@ function CenterLookup({
 function CenterCard({ center }: { center: CenterSummary }) {
   const phone = center.kind === "PHONE";
   return (
-    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm">
+    <div className="rounded-lg border border-brand-200 bg-brand-50/60 px-4 py-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-base font-medium text-slate-900">{phone ? `${formatPhone(center.customerCode)} · ${center.name}` : center.name}</span>
         <Badge tone={phone ? "sky" : "zinc"}>{phone ? "ค่าโทรศัพท์" : "ค่าอินเทอร์เน็ต"}</Badge>
@@ -431,7 +487,7 @@ function SignerSelect({
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label={label} htmlFor={name}>
-        <select
+        <Select
           id={name}
           name={name}
           value={current}
@@ -439,7 +495,6 @@ function SignerSelect({
             setOwn(e.target.value);
             onChange?.(e.target.value);
           }}
-          className={inputClass}
         >
           <option value="">{empty.label}</option>
           {options.map((o) => (
@@ -447,7 +502,7 @@ function SignerSelect({
               {o.name}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
       <div>
         <div className="text-sm font-medium text-slate-700">ตำแหน่ง</div>

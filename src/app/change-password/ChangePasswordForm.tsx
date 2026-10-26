@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyRound } from "lucide-react";
 import { useActionState } from "react";
 import { Button, Field, inputClass } from "@/components/ui";
 import { initialFormState } from "@/lib/formState";
@@ -51,7 +52,7 @@ export function ChangePasswordForm() {
           className={inputClass}
         />
       </Field>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" icon={KeyRound} disabled={pending}>
         {pending ? "กำลังบันทึก…" : "บันทึกรหัสผ่านใหม่"}
       </Button>
     </form>

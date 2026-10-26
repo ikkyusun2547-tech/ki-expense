@@ -1,5 +1,6 @@
 "use client";
 
+import { LogIn } from "lucide-react";
 import { useActionState } from "react";
 import { Alert, Button, Field, inputClass } from "@/components/ui";
 import { initialFormState } from "@/lib/formState";
@@ -28,10 +29,10 @@ export function LoginForm() {
       </Field>
       {/* ติ๊กไว้ให้ก่อน (เครื่องประจำตัว) — เครื่องใช้ร่วมให้เอาออก */}
       <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-600">
-        <input type="checkbox" name="remember" defaultChecked className="size-4 rounded border-slate-300 accent-emerald-700" />
+        <input type="checkbox" name="remember" defaultChecked className="size-4 rounded border-slate-300 accent-brand-700" />
         จดจำฉันไว้ 30 วัน <span className="text-xs text-slate-400">(ไม่ต้องติ๊กถ้าใช้เครื่องร่วมกับคนอื่น)</span>
       </label>
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" icon={LogIn} disabled={pending}>
         {pending ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบ"}
       </Button>
     </form>

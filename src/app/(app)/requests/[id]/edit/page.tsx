@@ -49,6 +49,8 @@ export default async function EditRequestPage({ params }: PageProps<"/requests/[
           values={{
             invoiceNo: request.invoiceNo,
             amount: request.amount.toFixed(2),
+            packageAmount: request.packageAmount?.toFixed(2) ?? "",
+            extraAmount: request.extraAmount?.toFixed(2) ?? "",
             periodStart: toISODate(request.periodStart),
             periodEnd: toISODate(request.periodEnd),
             dueDate: toISODate(request.dueDate),

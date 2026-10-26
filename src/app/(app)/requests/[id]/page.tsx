@@ -1,12 +1,15 @@
-import { ArrowLeft, Banknote, Check, CircleX, Clock, FileText, Paperclip, Pencil, Printer, Receipt, Send, Stamp, Trash, Undo2 } from "lucide-react";
+import { ArrowLeft, Banknote, Check, CircleX, Clock, ExternalLink, FileText, Paperclip, Pencil, Printer, Receipt, Send, Stamp, Trash, Undo2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import type { LogAction, RequestStatus } from "@/generated/prisma/enums";
 import { RequestStatusBadge } from "@/components/StatusBadge";
+import { PhoneChargesTable } from "@/components/PhoneCharges";
 import { Alert, ButtonAnchor, ButtonLink, Card, CardTitle, cx, PageHeader, type IconType } from "@/components/ui";
+import { kindHref } from "@/lib/auth/routes";
 import { centerCode } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { chosenSignersOf, resolveSigners, type ResolvedSigner } from "@/lib/pdf/memoData";
+import { storedCharges } from "@/lib/rules/phoneCharges";
 import { ACTION_LABEL, canPerform, isAssignedApprover, returnedBy, STATUS_LABEL } from "@/lib/status";
 import { bahtText } from "@/lib/thai/bahtText";
 import { daysInclusive, formatThaiDate, formatThaiDateTime, toISODate, todayISO } from "@/lib/thai/date";
@@ -32,7 +35,6 @@ const LOG_ICON: Record<LogAction, { icon: IconType; className: string }> = {
 export default async function RequestDetailPage({ params }: PageProps<"/requests/[id]">) {
   // ทุกบทบาทดูรายละเอียดได้ (บัญชีเปิดจากหน้าฝ่ายบัญชี) — ปุ่มที่ทำได้ขึ้นกับ state machine
   const user = await requireUser();
-  const backHref = { ACCOUNTING: "/accounting", APPROVER: "/approvals", CREATOR: "/requests", ADMIN: "/requests" }[user.role];
 
   const { id } = await params;
   const request = await db.request.findUnique({
@@ -57,6 +59,9 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
   // ถูกตีกลับ → แสดงเหตุผลบนสุด (ไม่ต้องไล่หาในประวัติ)
   const returned = deleted ? null : returnedBy(request.status, request.logs);
   const phone = request.center.kind === "PHONE";
+  const hasCharges = storedCharges(request) !== null;
+  const list = kindHref("/requests", request.center.kind);
+  const backHref = { ACCOUNTING: "/accounting", APPROVER: "/approvals", CREATOR: list, ADMIN: list }[user.role];
 
   return (
     <>
@@ -105,55 +110,66 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
               </div>
               <RequestStatusBadge status={request.status} />
             </div>
-            <dl className="grid gap-x-6 gap-y-4 px-6 py-5 text-sm sm:grid-cols-2">
-              <Item label={phone ? "เบอร์โทรศัพท์" : "ศูนย์"}>
-                {phone ? (
-                  <>
-                    <span className="tabular-nums">{centerCode(request.center)}</span>{" "}
-                    <span className="text-slate-400">
-                      ({request.center.provider} · {request.center.name})
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    {request.center.name} <span className="text-slate-400">({request.center.customerCode})</span>
-                  </>
-                )}
-              </Item>
-              <Item label="เลขที่ใบแจ้งหนี้">
-                <span className="tabular-nums">{request.invoiceNo}</span>
-              </Item>
-              <Item label="รอบบริการ">
-                {formatThaiDate(periodStart)} – {formatThaiDate(periodEnd)}{" "}
-                <span className="text-slate-400">({daysInclusive(periodStart, periodEnd)} วัน)</span>
-              </Item>
-              <Item label="วันครบกำหนดชำระ">{formatThaiDate(toISODate(request.dueDate))}</Item>
-              <Item label="ยอดปกติของศูนย์">
-                {formatAmount(request.center.normalAmount)} บาท
-                {differsFromNormal && <span className="ml-2 text-xs font-medium text-amber-700">ยอดเบิกไม่เท่ายอดปกติ</span>}
-              </Item>
-              <Item label="ผู้จัดทำ">{request.createdBy.name}</Item>
-              {!request.invoiceFileKey && (
+            {/* ข้อมูลใบเบิก / ยอดแยก (ค่าโทรศัพท์) / ผู้ลงนาม — ตารางหัวข้อซ้าย-ค่าขวา อ่านไล่ลงมาทีละแถว */}
+            <div className="flex flex-col gap-5 px-6 py-5">
+              <InfoTable title="ข้อมูลใบเบิก">
+                <Item label={phone ? "เบอร์โทรศัพท์" : "ศูนย์"}>
+                  {phone ? <span className="tabular-nums">{centerCode(request.center)}</span> : request.center.name}
+                  <Muted>
+                    {" "}
+                    · {request.center.provider} · {phone ? request.center.name : request.center.customerCode}
+                  </Muted>
+                </Item>
+                <Item label="เลขที่ใบแจ้งหนี้">
+                  <span className="break-all tabular-nums">{request.invoiceNo}</span>
+                </Item>
+                <Item label="รอบบริการ">
+                  {formatThaiDate(periodStart)} – {formatThaiDate(periodEnd)}
+                  <Muted> ({daysInclusive(periodStart, periodEnd)} วัน)</Muted>
+                </Item>
+                <Item label="ครบกำหนดชำระ">{formatThaiDate(toISODate(request.dueDate))}</Item>
+                <Item label={phone ? "ยอดปกติของเบอร์" : "ยอดปกติของศูนย์"}>
+                  <span className="tabular-nums">{formatAmount(request.center.normalAmount)}</span> บาท
+                  {differsFromNormal && (
+                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">ยอดเบิกไม่เท่ายอดปกติ</span>
+                  )}
+                </Item>
                 <Item label="ใบแจ้งหนี้">
-                  <span className="text-amber-700">ไม่ได้แนบไฟล์</span>
+                  {request.invoiceFileKey ? (
+                    <a
+                      href={`/api/requests/${request.id}/invoice`}
+                      target="_blank"
+                      rel="noopener"
+                      className="inline-flex items-center gap-1 font-medium text-brand-700 hover:underline"
+                    >
+                      <Paperclip className="size-3.5" aria-hidden /> แนบแล้ว (เปิดดู)
+                    </a>
+                  ) : (
+                    <span className="font-medium text-amber-700">ไม่ได้แนบไฟล์</span>
+                  )}
                 </Item>
-              )}
-              {request.paidDate && <Item label="วันที่จ่าย">{formatThaiDate(toISODate(request.paidDate))}</Item>}
-              {request.paymentRef && (
-                <Item label="เลขอ้างอิงการจ่าย">
-                  <span className="tabular-nums">{request.paymentRef}</span>
-                </Item>
-              )}
-            </dl>
-            {/* ผู้ลงนาม (ที่พิมพ์ในใบเบิก) — แสดงอย่างเดียว เปลี่ยนได้ที่ "แก้ไข" */}
-            <dl className="grid gap-x-6 gap-y-4 border-t border-slate-100 px-6 py-5 text-sm sm:grid-cols-2">
-              <SignerItem label="ผู้ขออนุมัติ" signer={signers.requester} />
-              <SignerItem label="ผู้อนุมัติ" signer={signers.approver}>
-                {request.approvedAt && (
-                  <div className="text-xs font-medium text-emerald-700">อนุมัติแล้ว {formatThaiDateTime(request.approvedAt)} น.</div>
+                {request.paidDate && <Item label="วันที่จ่าย">{formatThaiDate(toISODate(request.paidDate))}</Item>}
+                {request.paymentRef && (
+                  <Item label="เลขอ้างอิงการจ่าย">
+                    <span className="tabular-nums">{request.paymentRef}</span>
+                  </Item>
                 )}
-              </SignerItem>
-            </dl>
+              </InfoTable>
+
+              {/* ค่าโทรศัพท์: ยอดแยกแบบในบิล ให้ผู้ดู/ผู้อนุมัติเห็นชัด (ไม่พิมพ์ใน PDF) */}
+              {hasCharges && <PhoneChargesTable request={request} />}
+
+              {/* ผู้ลงนามที่พิมพ์ในใบเบิก — แสดงอย่างเดียว เปลี่ยนได้ที่ "แก้ไข" */}
+              <InfoTable title="ผู้ลงนาม">
+                <Item label="ผู้จัดทำ">{request.createdBy.name}</Item>
+                <SignerItem label="ผู้ขออนุมัติ" signer={signers.requester} />
+                <SignerItem label="ผู้อนุมัติ" signer={signers.approver}>
+                  {request.approvedAt && (
+                    <div className="text-xs font-medium text-emerald-700">อนุมัติแล้ว {formatThaiDateTime(request.approvedAt)} น.</div>
+                  )}
+                </SignerItem>
+              </InfoTable>
+            </div>
           </Card>
 
           {request.invoiceFileKey && <InvoicePreview id={request.id} fileKey={request.invoiceFileKey} fileName={request.invoiceFileName} />}
@@ -254,9 +270,9 @@ function InvoicePreview({ id, fileKey, fileName }: { id: string; fileKey: string
           <Paperclip className="size-4 shrink-0 text-slate-400" aria-hidden />
           <span className="truncate">ใบแจ้งหนี้{fileName && <span className="font-normal text-slate-500"> · {fileName}</span>}</span>
         </h2>
-        <a href={src} target="_blank" rel="noopener" className="shrink-0 text-sm font-medium text-emerald-700 hover:underline">
+        <ButtonAnchor href={src} target="_blank" rel="noopener" variant="secondary" size="sm" icon={ExternalLink} className="shrink-0">
           เปิดในแท็บใหม่
-        </a>
+        </ButtonAnchor>
       </div>
       {isPdf ? (
         <iframe src={`${src}#view=FitH`} title="ใบแจ้งหนี้" className="h-[70vh] min-h-96 w-full rounded-b-xl bg-slate-100" />
@@ -281,8 +297,8 @@ function Stepper({ status }: { status: RequestStatus }) {
             <span
               className={cx(
                 "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-                done && "bg-emerald-600 text-white",
-                active && "bg-emerald-100 text-emerald-800 ring-2 ring-emerald-600",
+                done && "bg-brand-600 text-white",
+                active && "bg-brand-100 text-brand-800 ring-2 ring-brand-600",
                 !done && !active && "bg-slate-100 text-slate-400",
               )}
             >
@@ -291,7 +307,7 @@ function Stepper({ status }: { status: RequestStatus }) {
             <span className={cx("whitespace-nowrap text-sm", done || active ? "font-medium text-slate-900" : "text-slate-400", !active && "hidden sm:inline")}>
               {STATUS_LABEL[step]}
             </span>
-            {i < STEPS.length - 1 && <span className={cx("mx-2 h-px flex-1", i < current ? "bg-emerald-600" : "bg-slate-200")} aria-hidden />}
+            {i < STEPS.length - 1 && <span className={cx("mx-2 h-px flex-1", i < current ? "bg-brand-600" : "bg-slate-200")} aria-hidden />}
           </li>
         );
       })}
@@ -302,18 +318,32 @@ function Stepper({ status }: { status: RequestStatus }) {
 function SignerItem({ label, signer, children }: { label: string; signer: ResolvedSigner; children?: ReactNode }) {
   return (
     <Item label={label}>
-      {signer.name || <span className="text-amber-700">ยังไม่เลือก</span>}
-      {signer.title && <div className="text-xs text-slate-500">{signer.title}</div>}
+      {signer.name || <span className="font-medium text-amber-700">ยังไม่เลือก</span>}
+      {signer.title && <Muted> · {signer.title}</Muted>}
       {children}
     </Item>
   );
 }
 
+// ตารางหัวข้อ-ค่า แบบเดียวกับตารางยอดแยกค่าโทรศัพท์ (PhoneChargesTable)
+function InfoTable({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h3 className="mb-2 text-sm font-semibold text-slate-800">{title}</h3>
+      <dl className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 text-sm">{children}</dl>
+    </section>
+  );
+}
+
 function Item({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div>
-      <dt className="text-xs text-slate-500">{label}</dt>
-      <dd className="mt-0.5 text-slate-900">{children}</dd>
+    <div className="flex gap-4 px-4 py-2">
+      <dt className="w-28 shrink-0 text-slate-500 sm:w-36">{label}</dt>
+      <dd className="min-w-0 flex-1 text-slate-900">{children}</dd>
     </div>
   );
+}
+
+function Muted({ children }: { children: ReactNode }) {
+  return <span className="text-slate-500">{children}</span>;
 }

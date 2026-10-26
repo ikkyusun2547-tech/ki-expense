@@ -1,4 +1,4 @@
-import { CalendarClock, CircleCheck, Clock, FileText, Inbox, LayoutDashboard, Plus, TriangleAlert } from "lucide-react";
+import { CalendarClock, CircleCheck, Clock, Eye, Inbox, LayoutDashboard, Plus, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
 import { RequestStatusBadge } from "@/components/StatusBadge";
@@ -6,7 +6,6 @@ import {
   Alert,
   Badge,
   ButtonLink,
-  cx,
   EmptyRow,
   NameCell,
   PageHeader,
@@ -20,7 +19,8 @@ import {
   type IconType,
 } from "@/components/ui";
 import type { ServiceKind } from "@/generated/prisma/enums";
-import { centerCode } from "@/lib/centers/phone";
+import { kindHref } from "@/lib/auth/routes";
+import { centerLabel } from "@/lib/centers/phone";
 import { DUE_SOON_DAYS, type CenterSummaryState } from "@/lib/rules/centerSummary";
 import { canCreateRequest } from "@/lib/status";
 import { formatThaiDate, todayISO } from "@/lib/thai/date";
@@ -38,8 +38,8 @@ const STATE: Record<CenterSummaryState, { label: string; short: string; tone: Ba
 const STATES = Object.keys(STATE) as CenterSummaryState[];
 
 const KIND_TAB: Record<ServiceKind, { label: string; noun: string }> = {
-  INTERNET: { label: "ศูนย์ (ค่าอินเทอร์เน็ต)", noun: "ศูนย์" },
-  PHONE: { label: "เบอร์ (ค่าโทรศัพท์)", noun: "เบอร์" },
+  INTERNET: { label: "ค่าอินเทอร์เน็ต", noun: "ศูนย์" },
+  PHONE: { label: "ค่าโทรศัพท์", noun: "เบอร์" },
 };
 
 export default async function SummaryPage({ searchParams }: PageProps<"/summary">) {
@@ -61,16 +61,12 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
         })
       : null;
 
-  // แท็บ ศูนย์ / เบอร์โทร (มีแท็บเบอร์เมื่อมีเบอร์ในทะเบียน) — เพิ่งส่งใบค่าโทรศัพท์ → เปิดแท็บเบอร์ให้
-  const kind: ServiceKind = params.kind === "PHONE" || params.kind === "INTERNET" ? params.kind : (sent?.center.kind ?? "INTERNET");
-  const hasPhones = all.some((r) => r.center.kind === "PHONE");
+  // ประเภทตามเมนู (?kind=) — ไม่ระบุ = ค่าอินเทอร์เน็ต (หน้าแรกของผู้จัดทำ)
+  const kind: ServiceKind = params.kind === "PHONE" ? "PHONE" : "INTERNET";
   const rows = all.filter((r) => r.center.kind === kind);
   const noun = KIND_TAB[kind].noun;
-  const href = (state?: CenterSummaryState) => {
-    const p = new URLSearchParams({ ...(kind === "PHONE" && { kind }), ...(state && { state }) });
-    return p.size ? `/summary?${p}` : "/summary";
-  };
-  const drafts = isCreator ? await db.request.count({ where: { status: "CREATED", deletedAt: null } }) : 0;
+  const href = (state?: CenterSummaryState) => `${kindHref("/summary", kind)}${state ? `&state=${state}` : ""}`;
+  const drafts = isCreator ? await db.request.count({ where: { status: "CREATED", deletedAt: null, center: { kind } } }) : 0;
   const shown = filter ? rows.filter((r) => r.state === filter) : rows;
   const countOf = (s: CenterSummaryState) => rows.filter((r) => r.state === s).length;
 
@@ -79,7 +75,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
       <PageHeader
         icon={LayoutDashboard}
         title={kind === "PHONE" ? "สรุปรายเบอร์" : "สรุปรายศูนย์"}
-        description={`${rows.length} ${noun} · ณ ${formatThaiDate(today, "long")}`}
+        description={`${KIND_TAB[kind].label} · ${rows.length} ${noun} · ณ ${formatThaiDate(today, "long")}`}
       />
 
       {(sent || drafts > 0) && (
@@ -94,45 +90,13 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
           )}
           {drafts > 0 && (
             <Alert tone="warning">
-              มีใบเบิกที่ยังไม่ส่งขออนุมัติ <span className="font-semibold">{drafts} ใบ</span> (รวมใบที่ผู้อนุมัติส่งกลับให้แก้) ·{" "}
-              <Link href="/requests?status=CREATED" className="font-medium underline">
+              มีใบเบิก{KIND_TAB[kind].label}ที่ยังไม่ส่งขออนุมัติ <span className="font-semibold">{drafts} ใบ</span> (รวมใบที่ผู้อนุมัติส่งกลับให้แก้) ·{" "}
+              <Link href={`${kindHref("/requests", kind)}&status=CREATED`} className="font-medium underline">
                 ดูรายการ
               </Link>
             </Alert>
           )}
         </div>
-      )}
-
-      {hasPhones && (
-        <nav className="mb-4 inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-sm">
-          {(Object.keys(KIND_TAB) as ServiceKind[]).map((k) => {
-            const todo = all.filter((r) => r.center.kind === k && (r.state === "OVERDUE" || r.state === "DUE_SOON"));
-            const active = kind === k;
-            return (
-              <Link
-                key={k}
-                href={k === "PHONE" ? "/summary?kind=PHONE" : "/summary"}
-                aria-current={active ? "page" : undefined}
-                className={cx(
-                  "flex items-center gap-1.5 rounded-md px-4 py-1.5",
-                  active ? "bg-emerald-700 font-medium text-white shadow-sm" : "text-slate-600 hover:bg-slate-100",
-                )}
-              >
-                {KIND_TAB[k].label}
-                {todo.length > 0 && (
-                  <span
-                    className={cx(
-                      "rounded-full px-1.5 text-xs",
-                      active ? "bg-white/20" : todo.some((r) => r.state === "OVERDUE") ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800",
-                    )}
-                  >
-                    {todo.length}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
@@ -153,7 +117,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
       {filter && (
         <div className="mb-3 flex items-center gap-2 text-sm text-slate-500">
           แสดงเฉพาะ <Badge tone={STATE[filter].tone}>{STATE[filter].label}</Badge>
-          <Link href={href()} className="font-medium text-emerald-700 hover:underline">
+          <Link href={href()} className="font-medium text-brand-700 hover:underline">
             แสดงทั้งหมด
           </Link>
         </div>
@@ -164,7 +128,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
         {shown.map((r) => (
           <li key={r.center.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
-              <NameCell name={r.center.name} code={centerCode(r.center)} />
+              <NameCell {...centerLabel(r.center)} />
               <StatusBadge row={r} />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
@@ -198,7 +162,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
               {shown.map((r) => (
                 <tr key={r.center.id} className={rowClass}>
                   <td className={tdClass}>
-                    <NameCell name={r.center.name} code={centerCode(r.center)} />
+                    <NameCell {...centerLabel(r.center)} />
                   </td>
                   <td className={`${tdClass} whitespace-nowrap`}>
                     <div className="flex flex-wrap items-center gap-2">
@@ -240,7 +204,7 @@ function RowAction({ row, isCreator, fullWidth }: { row: Row; isCreator: boolean
   const width = fullWidth ? "w-full" : "w-32";
   if (row.request) {
     return (
-      <ButtonLink href={`/requests/${row.request.id}`} variant="secondary" size="sm" icon={FileText} className={width}>
+      <ButtonLink href={`/requests/${row.request.id}`} variant="secondary" size="sm" icon={Eye} className={width}>
         ดูใบเบิก
       </ButtonLink>
     );

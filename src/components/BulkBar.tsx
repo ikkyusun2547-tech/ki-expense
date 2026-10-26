@@ -1,5 +1,6 @@
 "use client";
 
+import { ListChecks } from "lucide-react";
 import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { Alert, Button, cx, type IconType } from "@/components/ui";
 import { initialFormState, type FormState } from "@/lib/formState";
@@ -60,12 +61,12 @@ export function BulkBar({
       }}
       className={cx(
         "mb-4 flex flex-col gap-3 rounded-xl border p-3 shadow-sm",
-        count > 0 ? "border-emerald-200 bg-emerald-50/40" : "border-slate-200 bg-white",
+        count > 0 ? "border-brand-200 bg-brand-50/40" : "border-slate-200 bg-white",
       )}
     >
       {state.error && <Alert tone="error">{state.error}</Alert>}
       <div className="flex flex-wrap items-end gap-3">
-        <Button type="button" variant="ghost" size="sm" onClick={toggleAll}>
+        <Button type="button" variant="ghost" size="sm" icon={ListChecks} onClick={toggleAll}>
           {count > 0 ? "ยกเลิกที่เลือก" : "เลือกทั้งหมด"}
         </Button>
         {/* ยังไม่ติ๊ก → บรรทัดเดียวบอกวิธีใช้; ติ๊กแล้ว → ช่องกรอก + ปุ่มบันทึก */}
@@ -96,7 +97,7 @@ export function BulkCheckbox({ formId, id, label }: { formId: string; id: string
       name="ids"
       value={id}
       aria-label={label}
-      className="size-4 cursor-pointer rounded border-slate-300 accent-emerald-700"
+      className="size-4 cursor-pointer rounded border-slate-300 accent-brand-700"
     />
   );
 }

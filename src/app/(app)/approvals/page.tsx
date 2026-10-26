@@ -1,12 +1,13 @@
-import { CircleCheck, Clock, Inbox, Paperclip, Stamp } from "lucide-react";
+import { CircleCheck, Clock, Eye, Inbox, Paperclip, Stamp } from "lucide-react";
 import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
 import { RequestStatusBadge } from "@/components/StatusBadge";
-import { Alert, cx, EmptyRow, NameCell, PageHeader, RowLink, rowClass, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
-import { centerCode, kindTag } from "@/lib/centers/phone";
+import { PhoneChargesNote } from "@/components/PhoneCharges";
+import { Alert, ButtonAnchor, cx, EmptyRow, NameCell, PageHeader, RowLink, rowClass, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
+import { centerLabel, kindTag } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { daysUntil } from "@/lib/rules/centerSummary";
-import { formatThaiDate, formatThaiDateTime, toISODate, todayISO } from "@/lib/thai/date";
+import { formatThaiDate, formatThaiDateRange, formatThaiDateTime, todayISO, toISODate } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
 import { BulkCheckbox } from "@/components/BulkBar";
@@ -60,11 +61,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
       <PageHeader
         icon={Stamp}
         title="รออนุมัติ"
-        description={
-          isApprover
-            ? "ใบเบิกที่ส่งมาให้คุณ — ใกล้ครบกำหนดอยู่บนสุด"
-            : "ใบที่รออนุมัติทั้งหมด (ดูอย่างเดียว)"
-        }
+        description={isApprover ? "ใบเบิกที่ส่งมาให้คุณ — ใกล้ครบกำหนดอยู่บนสุด" : "ใบที่รออนุมัติทั้งหมด (ดูอย่างเดียว)"}
       />
 
       {(done || fail > 0) && (
@@ -82,7 +79,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
             aria-current={tab === t.key ? "page" : undefined}
             className={cx(
               "flex items-center gap-1.5 rounded-md px-4 py-1.5",
-              tab === t.key ? "bg-emerald-700 font-medium text-white shadow-sm" : "text-slate-600 hover:bg-slate-100",
+              tab === t.key ? "bg-brand-700 font-medium text-white shadow-sm" : "text-slate-600 hover:bg-slate-100",
             )}
           >
             <t.icon className="size-4" aria-hidden />
@@ -105,10 +102,11 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                 <thead>
                   <tr>
                     {isApprover && <th className={`${thClass} w-10`} />}
-                    <th className={thClass}>ครบกำหนด</th>
-                    <th className={thClass}>ศูนย์ / รอบบริการ</th>
+                    <th className={thClass}>ศูนย์ / เบอร์</th>
+                    <th className={thClass}>รอบบริการ / ครบกำหนด</th>
                     <th className={`${thClass} text-right`}>ยอด (บาท)</th>
-                    <th className={thClass}>ผู้ขออนุมัติ</th>
+                    {/* ผู้อนุมัติ: เว้นที่ให้ปุ่ม — ผู้ขออนุมัติดูได้ในหน้าใบเบิก; admin (ไม่มีปุ่ม) เห็นทั้งสองคอลัมน์ */}
+                    {!isApprover && <th className={thClass}>ผู้ขออนุมัติ</th>}
                     {!isApprover && <th className={thClass}>ผู้อนุมัติ</th>}
                     <th className={thClass} />
                   </tr>
@@ -117,45 +115,35 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                   {pending.map((r) => {
                     const due = toISODate(r.dueDate);
                     return (
-                      <tr key={r.id} className={cx(rowClass, "align-top")}>
+                      <tr key={r.id} className={rowClass}>
                         {isApprover && (
                           <td className={tdClass}>
                             <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
                           </td>
                         )}
                         <td className={`${tdClass} whitespace-nowrap`}>
-                          <div className="flex flex-col items-start gap-1">
-                            <span>{formatThaiDate(due)}</span>
+                          <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                          {/* ดูไฟล์ได้ที่ปุ่ม "ดู" — แจ้งเฉพาะใบที่ไม่ได้แนบ (จุดที่ผู้อนุมัติควรสังเกต) */}
+                          {!r.invoiceFileKey && <div className="text-xs font-medium text-amber-700">ไม่ได้แนบใบแจ้งหนี้</div>}
+                        </td>
+                        <td className={`${tdClass} whitespace-nowrap`}>
+                          <div>{formatThaiDateRange(toISODate(r.periodStart), toISODate(r.periodEnd))}</div>
+                          <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                            ครบกำหนด {formatThaiDate(due)}
                             <DueBadge daysLeft={daysUntil(today, due)} />
                           </div>
                         </td>
-                        {/* รอบบริการ + ไฟล์อยู่ใต้ชื่อศูนย์ เพื่อเหลือที่ให้ปุ่มอนุมัติ/ไม่อนุมัติ */}
-                        <td className={tdClass}>
-                          <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
-                          <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-                            <span className="whitespace-nowrap">
-                              {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
-                            </span>
-                            {r.invoiceFileKey ? (
-                              <a
-                                href={`/api/requests/${r.id}/invoice`}
-                                target="_blank"
-                                rel="noopener"
-                                className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-emerald-700 hover:underline"
-                              >
-                                <Paperclip className="size-3" aria-hidden /> เปิดไฟล์
-                              </a>
-                            ) : (
-                              <span className="text-amber-700">ไม่มีไฟล์</span>
-                            )}
-                          </div>
+                        <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>
+                          {formatAmount(r.amount)}
+                          <PhoneChargesNote request={r} />
                         </td>
-                        <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(r.amount)}</td>
-                        <td className={tdClass}>{r.requesterName ?? r.createdBy.name}</td>
-                        {!isApprover && <td className={tdClass}>{r.approverName}</td>}
-                        <td className={`${tdClass} text-right`}>
-                          <div className="flex items-start justify-end gap-1">
-                            <RowLink href={`/requests/${r.id}`}>ดู</RowLink>
+                        {!isApprover && <td className={`${tdClass} whitespace-nowrap`}>{r.requesterName ?? r.createdBy.name}</td>}
+                        {!isApprover && <td className={`${tdClass} whitespace-nowrap`}>{r.approverName}</td>}
+                        <td className={tdClass}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <RowLink href={`/requests/${r.id}`} icon={Eye}>
+                              ดู
+                            </RowLink>
                             {isApprover && <ApproveButton id={r.id} />}
                           </div>
                         </td>
@@ -203,11 +191,12 @@ function PendingCards({ rows, today, isApprover }: { rows: PendingRow[]; today: 
                     <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
                   </span>
                 )}
-                <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
               </div>
               <div className="text-right">
                 <div className="text-lg font-bold tabular-nums text-slate-900">{formatAmount(r.amount)}</div>
                 <div className="text-xs text-slate-500">บาท</div>
+                <PhoneChargesNote request={r} />
               </div>
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
@@ -219,9 +208,7 @@ function PendingCards({ rows, today, isApprover }: { rows: PendingRow[]; today: 
               </div>
               <div>
                 <dt className="text-xs text-slate-500">รอบบริการ</dt>
-                <dd>
-                  {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
-                </dd>
+                <dd>{formatThaiDateRange(toISODate(r.periodStart), toISODate(r.periodEnd))}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-500">ผู้ขออนุมัติ</dt>
@@ -236,18 +223,21 @@ function PendingCards({ rows, today, isApprover }: { rows: PendingRow[]; today: 
             </dl>
             <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
               {r.invoiceFileKey ? (
-                <a
+                <ButtonAnchor
                   href={`/api/requests/${r.id}/invoice`}
                   target="_blank"
                   rel="noopener"
-                  className="mr-auto inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:underline"
+                  variant="secondary"
+                  size="sm"
+                  icon={Paperclip}
+                  className="mr-auto"
                 >
-                  <Paperclip className="size-3.5" aria-hidden /> เปิดไฟล์
-                </a>
+                  เปิดไฟล์
+                </ButtonAnchor>
               ) : (
                 <span className="mr-auto text-xs text-amber-700">ไม่มีไฟล์</span>
               )}
-              <RowLink href={`/requests/${r.id}`}>ดู</RowLink>
+              <RowLink href={`/requests/${r.id}`} icon={Eye}>ดู</RowLink>
               {isApprover && <ApproveButton id={r.id} />}
             </div>
           </li>
@@ -277,7 +267,7 @@ async function DoneTable({ where, showApprover }: { where: { approverId?: string
         <thead>
           <tr>
             <th className={thClass}>อนุมัติเมื่อ</th>
-            <th className={thClass}>ศูนย์</th>
+            <th className={thClass}>ศูนย์ / เบอร์</th>
             <th className={`${thClass} text-right`}>ยอด (บาท)</th>
             <th className={thClass}>ผู้ขออนุมัติ</th>
             {showApprover && <th className={thClass}>ผู้อนุมัติ</th>}
@@ -289,9 +279,12 @@ async function DoneTable({ where, showApprover }: { where: { approverId?: string
             <tr key={r.id} className={rowClass}>
               <td className={`${tdClass} whitespace-nowrap`}>{r.approvedAt && formatThaiDateTime(r.approvedAt)}</td>
               <td className={tdClass}>
-                <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
               </td>
-              <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(r.amount)}</td>
+              <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>
+                {formatAmount(r.amount)}
+                <PhoneChargesNote request={r} />
+              </td>
               <td className={tdClass}>{r.requesterName ?? r.createdBy.name}</td>
               {showApprover && <td className={tdClass}>{r.approverName}</td>}
               <td className={tdClass}>
@@ -309,3 +302,4 @@ async function DoneTable({ where, showApprover }: { where: { approverId?: string
     </TableCard>
   );
 }
+

@@ -72,7 +72,7 @@ export function PayForm({
               {dateInput}
             </div>
             <div className="min-w-0 flex-1">{refInput}</div>
-            <Button type="submit" size="sm" icon={Banknote} disabled={pending} className="h-10 shrink-0">
+            <Button type="submit" icon={Banknote} disabled={pending} className="shrink-0">
               {pending ? "กำลังบันทึก…" : "บันทึกจ่าย"}
             </Button>
           </div>
@@ -88,7 +88,7 @@ export function PayForm({
           <Field label="เลขอ้างอิงการจ่าย" htmlFor={refId} errors={errors.paymentRef}>
             {refInput}
           </Field>
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" icon={Banknote} disabled={pending}>
             {pending ? "กำลังบันทึก…" : "บันทึกการจ่าย"}
           </Button>
         </>

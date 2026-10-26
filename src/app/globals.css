@@ -11,6 +11,30 @@
   --font-sans: var(--font-sarabun);
 }
 
+/*
+ * ธีมสีของระบบ (ผู้ใช้เลือก "กรมท่า + แดง KI" 2026-10-26) — เปลี่ยนโทนทั้งเว็บที่นี่ที่เดียว
+ * brand  = กรมท่า: แถบเมนู ปุ่มหลัก ลิงก์ โฟกัส
+ * accent = แดงจากโลโก้ KI: จุดเน้นเล็ก ๆ (แถบเมนูที่เปิดอยู่)
+ * สีสถานะคงความหมายเดิม: เขียว emerald = สำเร็จ/จ่ายแล้ว, เหลือง amber = เตือน, แดง red = ผิดพลาด/ลบ
+ */
+@theme {
+  --color-brand-50: #f2f5fa;
+  --color-brand-100: #e3e9f3;
+  --color-brand-200: #c7d3e7;
+  --color-brand-300: #9fb3d4;
+  --color-brand-400: #6f8bbb;
+  --color-brand-500: #4c6aa2;
+  --color-brand-600: #3a5488;
+  --color-brand-700: #2f456f;
+  --color-brand-800: #26385a;
+  --color-brand-900: #1d2b45;
+  --color-brand-950: #131c2e;
+
+  --color-accent-400: #ef5a6f;
+  --color-accent-500: #e3263f;
+  --color-accent-600: #c8102e;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

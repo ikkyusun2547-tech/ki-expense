@@ -36,7 +36,7 @@ async function AppFrame({ children }: { children: ReactNode }) {
 function FrameSkeleton() {
   return (
     <div className="flex min-h-full flex-1 flex-col bg-slate-50">
-      <div className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white lg:block" />
+      <div className="fixed inset-y-0 left-0 hidden w-64 bg-brand-900 lg:block" />
       <div className="h-14 border-b border-slate-200 bg-white lg:hidden" />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 lg:pl-72">
         <div className="h-8 w-48 animate-pulse rounded-lg bg-slate-200" />

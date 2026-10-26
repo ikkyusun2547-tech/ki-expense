@@ -1,4 +1,4 @@
-import { CircleCheck, CircleX, Inbox, Plus, Smartphone, Upload } from "lucide-react";
+import { CircleCheck, CircleX, Inbox, Pencil, Plus, Search, Smartphone, Upload, X } from "lucide-react";
 import { CenterStatusBadge } from "@/components/StatusBadge";
 import {
   Button,
@@ -108,11 +108,11 @@ export default async function PhonesPage({ searchParams }: PageProps<"/admin/pho
           options={[{ value: "", label: "ทุกสถานะ" }, ...STATUSES.map((s) => ({ value: s, label: PHONE_STATUS_LABEL[s] }))]}
         />
         <div className="flex gap-2">
-          <Button type="submit" variant="secondary" className="flex-1 sm:flex-none">
+          <Button type="submit" variant="secondary" icon={Search} className="flex-1 sm:flex-none">
             ค้นหา
           </Button>
           {(q || status) && (
-            <ButtonLink href="/admin/phones" variant="ghost">
+            <ButtonLink href="/admin/phones" variant="ghost" icon={X}>
               ล้างตัวกรอง
             </ButtonLink>
           )}
@@ -137,7 +137,7 @@ export default async function PhonesPage({ searchParams }: PageProps<"/admin/pho
             {phones.map((p) => (
               <tr key={p.id} className={rowClass}>
                 <td className={tdClass}>
-                  <NameCell name={formatPhone(p.customerCode)} code={p.name} href={`/admin/phones/${p.id}`} />
+                  <NameCell name={formatPhone(p.customerCode)} code={`ผู้ใช้: ${p.name}`} href={`/admin/phones/${p.id}`} />
                 </td>
                 <td className={tdClass}>{p.provider || "–"}</td>
                 <td className={`${tdClass} tabular-nums text-slate-500`}>{p.serviceNumber ?? "–"}</td>
@@ -148,7 +148,7 @@ export default async function PhonesPage({ searchParams }: PageProps<"/admin/pho
                 </td>
                 <td className={`${tdClass} text-right tabular-nums`}>{p._count.requests}</td>
                 <td className={`${tdClass} text-right`}>
-                  <RowLink href={`/admin/phones/${p.id}`}>แก้ไข</RowLink>
+                  <RowLink href={`/admin/phones/${p.id}`} icon={Pencil}>แก้ไข</RowLink>
                 </td>
               </tr>
             ))}

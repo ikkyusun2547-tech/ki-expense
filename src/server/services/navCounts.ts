@@ -1,4 +1,5 @@
 import "server-only";
+import { kindHref } from "@/lib/auth/routes";
 import type { ISODate } from "@/lib/thai/date";
 import type { CurrentUser } from "@/server/auth";
 import { db } from "@/server/db";
@@ -20,12 +21,15 @@ export async function getNavCounts(user: CurrentUser, today: ISODate): Promise<N
 
   switch (user.role) {
     case "CREATOR": {
-      // ศูนย์/เบอร์ที่ต้องเบิก (เลยกำหนด/ใกล้ครบ) + ใบที่ยังไม่ส่งขออนุมัติ (รวมใบที่ถูกตีกลับ)
+      // แยกตามประเภท (เมนูค่าอินเทอร์เน็ต / ค่าโทรศัพท์): ศูนย์/เบอร์ที่ต้องเบิก (เลยกำหนด/ใกล้ครบ) + ใบที่ยังไม่ส่งขออนุมัติ (รวมใบที่ถูกตีกลับ)
       const summaries = await getCenterSummaries(today);
-      const overdue = summaries.filter((s) => s.state === "OVERDUE").length;
-      const dueSoon = summaries.filter((s) => s.state === "DUE_SOON").length;
-      put("/summary", overdue + dueSoon, overdue > 0 ? "red" : "amber");
-      put("/requests", await db.request.count({ where: { status: "CREATED", deletedAt: null } }), "amber");
+      for (const kind of ["INTERNET", "PHONE"] as const) {
+        const mine = summaries.filter((s) => s.center.kind === kind);
+        const overdue = mine.filter((s) => s.state === "OVERDUE").length;
+        const dueSoon = mine.filter((s) => s.state === "DUE_SOON").length;
+        put(kindHref("/summary", kind), overdue + dueSoon, overdue > 0 ? "red" : "amber");
+        put(kindHref("/requests", kind), await db.request.count({ where: { status: "CREATED", deletedAt: null, center: { kind } } }), "amber");
+      }
       break;
     }
     case "APPROVER":

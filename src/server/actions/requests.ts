@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import type { CenterStatus, ServiceKind } from "@/generated/prisma/enums";
 import { normalizePhone } from "@/lib/centers/phone";
 import type { FormState } from "@/lib/formState";
+import { packageFromNormal, phoneCharges } from "@/lib/rules/phoneCharges";
 import { suggestRequest, type RequestSuggestion } from "@/lib/rules/requestDefaults";
 import type { Issue } from "@/lib/rules/requestRules";
 import { fieldErrorsOf, memoTextsSchema } from "@/lib/validation";
@@ -44,13 +45,18 @@ export async function findCenterByCode(code: string): Promise<CenterLookup> {
   const last = await db.request.findFirst({
     where: { centerId: center.id, deletedAt: null },
     orderBy: { periodEnd: "desc" },
-    select: { periodEnd: true, dueDate: true },
+    select: { periodEnd: true, dueDate: true, packageAmount: true },
   });
-  const suggestion = suggestRequest(
+  const base = suggestRequest(
     { normalAmount: center.normalAmount.toFixed(2), dueDay: center.dueDay },
     last && { periodEnd: toISODate(last.periodEnd), dueDate: toISODate(last.dueDate) },
     todayISO(),
   );
+  // ค่าโทรศัพท์: แพ็กเกจหลักตามใบล่าสุดของเบอร์นี้ (ไม่เคยเบิก = ยอดปกติในทะเบียนถอด VAT), ส่วนเกิน = 0
+  const packageAmount = center.kind === "PHONE" ? (last?.packageAmount?.toFixed(2) ?? packageFromNormal(center.normalAmount.toFixed(2))) : null;
+  const suggestion: RequestSuggestion = packageAmount
+    ? { ...base, packageAmount, extraAmount: "0.00", amount: phoneCharges(packageAmount, "0")!.total }
+    : base;
 
   return {
     ok: true,
@@ -88,6 +94,9 @@ export async function saveRequest(_prev: RequestFormState, formData: FormData): 
     periodStart: text("periodStart"),
     periodEnd: text("periodEnd"),
     dueDate: text("dueDate"),
+    // ค่าโทรศัพท์เท่านั้น (ฟอร์มค่าอินเทอร์เน็ตไม่มีสองช่องนี้)
+    packageAmount: text("packageAmount"),
+    extraAmount: text("extraAmount"),
   };
   const upload = formData.get("invoiceFile");
   const file = upload instanceof File && upload.size > 0 ? upload : null;
@@ -113,7 +122,9 @@ export async function saveRequest(_prev: RequestFormState, formData: FormData): 
 
   const sent = await transitionRequest({ requestId: outcome.id, action: "SUBMIT", actor });
   // บันทึกแล้วแต่ส่งไม่สำเร็จ (เช่น ผู้อนุมัติถูกปิดบัญชีพอดี) → ไปหน้าใบเบิกให้ส่งเอง
-  redirect(sent.ok ? `/summary?sent=${outcome.id}` : `/requests/${outcome.id}`);
+  if (!sent.ok) redirect(`/requests/${outcome.id}`);
+  const { center } = await db.request.findUniqueOrThrow({ where: { id: outcome.id }, select: { center: { select: { kind: true } } } });
+  redirect(`/summary?kind=${center.kind}&sent=${outcome.id}`);
 }
 
 const TRANSITIONS = ["SUBMIT", "APPROVE", "REJECT", "DELETE", "REVERT"] as const;

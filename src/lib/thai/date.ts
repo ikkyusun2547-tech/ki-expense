@@ -125,3 +125,10 @@ export function maskBEInput(text: string): string {
   const digits = text.replace(/\D/g, "").slice(0, 8);
   return [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join("/");
 }
+
+// ช่วงวันที่แบบสั้น: ปีเดียวกันพิมพ์ปีครั้งเดียว "21 ก.ย. – 20 ต.ค. 2569" / ข้ามปี "16 ธ.ค. 2569 – 15 ม.ค. 2570"
+export function formatThaiDateRange(start: ISODate, end: ISODate): string {
+  const a = formatThaiDate(start);
+  const b = formatThaiDate(end);
+  return start.slice(0, 4) === end.slice(0, 4) ? `${a.replace(/ \d{4}$/, "")} – ${b}` : `${a} – ${b}`;
+}

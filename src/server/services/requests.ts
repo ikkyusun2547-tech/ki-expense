@@ -3,6 +3,7 @@ import type { Role, ServiceKind } from "@/generated/prisma/enums";
 import { toAmountString } from "@/lib/money";
 import { fillMemoTexts, type MemoTexts } from "@/lib/pdf/memoData";
 import { checkPayment, type PaymentInput } from "@/lib/rules/paymentRules";
+import { phoneCharges } from "@/lib/rules/phoneCharges";
 import { checkRequest, needsConfirm, type Issue, type RequestDraft } from "@/lib/rules/requestRules";
 import { checkSignerChange, checkTransition, isAssignedApprover, type RequestAction } from "@/lib/status";
 import { formatThaiDate, fromISODate, toISODate, type ISODate } from "@/lib/thai/date";
@@ -14,7 +15,8 @@ import { removeInvoiceFile, saveInvoiceFile, type SavedFile } from "@/server/fil
 // ตรรกะใบเบิกที่แตะ DB — ทุกการเปลี่ยนแปลงเขียน ApprovalLog ใน transaction เดียวกัน
 // ผู้เรียก (Server Action) ต้อง requireRole ก่อน; ที่นี่ตรวจสิทธิ์ตาม state machine ซ้ำอีกชั้น
 
-export type RequestInput = Omit<RequestDraft, "hasFile">;
+// ค่าโทรศัพท์: packageAmount/extraAmount (ก่อน VAT) — ยอดเบิกคิดใหม่จากสองช่องนี้ในฝั่งเซิร์ฟเวอร์ ไม่ใช้ amount ที่ส่งมา
+export type RequestInput = Omit<RequestDraft, "hasFile"> & { packageAmount?: string; extraAmount?: string };
 
 export type SaveOutcome =
   | { ok: true; id: string }
@@ -50,6 +52,9 @@ function toDbFields(input: RequestInput) {
   };
 }
 
+// ช่องที่บันทึกลง DB หลังตรวจผ่าน (ค่าโทรศัพท์: ยอดแยก + ยอดรวมที่คิดเอง)
+type Checked = { ok: true; kind: ServiceKind; fields: ReturnType<typeof toDbFields> & { packageAmount?: string; extraAmount?: string } };
+
 // ตรวจกฎ + ตรวจไฟล์ แล้วตัดสินว่าบันทึกได้หรือยัง (คำเตือนต้องได้รับการยืนยันก่อน)
 async function validate(args: {
   centerId: string;
@@ -58,22 +63,33 @@ async function validate(args: {
   hasExistingFile: boolean;
   confirmWarnings: boolean;
   excludeRequestId?: string;
-}): Promise<{ ok: true; kind: ServiceKind } | Extract<SaveOutcome, { ok: false }>> {
+}): Promise<Checked | Extract<SaveOutcome, { ok: false }>> {
   const center = await db.center.findUnique({ where: { id: args.centerId } });
   if (!center) return { ok: false, blocks: [], warnings: [], error: "ไม่พบศูนย์/เบอร์นี้ในทะเบียน" };
 
-  const draft: RequestDraft = { ...args.input, hasFile: !!args.file || args.hasExistingFile };
+  let input = args.input;
+  const charges = center.kind === "PHONE" ? phoneCharges(input.packageAmount ?? "", input.extraAmount ?? "") : null;
+  if (center.kind === "PHONE") {
+    if (!charges) {
+      const message = "กรอกค่าบริการแพ็กเกจหลัก และค่าแพ็กเกจเสริม/ส่วนเกิน เป็นตัวเลข ทศนิยมไม่เกิน 2 ตำแหน่ง";
+      return { ok: false, blocks: [{ code: "MISSING_FIELD", message }], warnings: [] };
+    }
+    input = { ...input, amount: charges.total };
+  }
+
+  const draft: RequestDraft = { ...input, hasFile: !!args.file || args.hasExistingFile };
   const { blocks, warnings } = checkRequest(
     draft,
     { status: center.status, normalAmount: center.normalAmount.toFixed(2), kind: center.kind },
     await existingPeriods(center.id, args.excludeRequestId),
   );
-  if (args.input.invoiceNo.trim().length > MAX_INVOICE_NO) {
+  if (input.invoiceNo.trim().length > MAX_INVOICE_NO) {
     blocks.push({ code: "MISSING_FIELD", message: `เลขที่ใบแจ้งหนี้ยาวเกิน ${MAX_INVOICE_NO} ตัวอักษร` });
   }
 
   if (blocks.length || (needsConfirm(warnings) && !args.confirmWarnings)) return { ok: false, blocks, warnings };
-  return { ok: true, kind: center.kind };
+  const fields = { ...toDbFields(input), ...(charges && { packageAmount: charges.packageAmount, extraAmount: charges.extraAmount }) };
+  return { ok: true, kind: center.kind, fields };
 }
 
 async function storeFile(file: File | null): Promise<{ ok: true; saved: SavedFile | null } | { ok: false; error: string }> {
@@ -123,7 +139,7 @@ export async function createRequest(args: {
       const created = await tx.request.create({
         data: {
           centerId: args.centerId,
-          ...toDbFields(args.input),
+          ...check.fields,
           invoiceFileKey: stored.saved?.key,
           invoiceFileName: stored.saved?.fileName,
           ...approverData(approver),
@@ -188,7 +204,7 @@ export async function updateRequest(args: {
       const updated = await tx.request.updateMany({
         where: { id: current.id, status: "CREATED", deletedAt: null },
         data: {
-          ...toDbFields(args.input),
+          ...check.fields,
           ...(stored.saved && { invoiceFileKey: stored.saved.key, invoiceFileName: stored.saved.fileName }),
           ...(approver && approverData(approver)),
           ...(requester && requesterData(requester)),

@@ -9,8 +9,8 @@ const sarabun = Sarabun({
 });
 
 export const metadata: Metadata = {
-  title: "ระบบเบิกค่าอินเทอร์เน็ต",
-  description: "ระบบเบิกค่าอินเทอร์เน็ต 3BB ของศูนย์ — บริษัท น้ำตาลสุรินทร์ จำกัด",
+  title: "ระบบเบิกค่าบริการ",
+  description: "เบิกค่าอินเทอร์เน็ตของศูนย์และค่าโทรศัพท์ — บริษัท น้ำตาลสุรินทร์ จำกัด",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

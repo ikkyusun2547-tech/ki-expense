@@ -9,6 +9,8 @@ import { addDays, type ISODate } from "@/lib/thai/date";
 
 export type RequestSuggestion = {
   amount: string;
+  packageAmount?: string; // ค่าโทรศัพท์ (ก่อน VAT) — ผู้เรียกเติมเอง
+  extraAmount?: string;
   periodStart: ISODate | "";
   periodEnd: ISODate | "";
   dueDate: ISODate;

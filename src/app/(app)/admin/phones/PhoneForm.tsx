@@ -1,8 +1,10 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import { useActionState } from "react";
-import { Alert, Button, ButtonLink, Field, inputClass } from "@/components/ui";
-import { DEFAULT_PROVIDER, PROVIDER_SUGGESTIONS } from "@/lib/centers/phone";
+import { Alert, Button, ButtonLink, Field, inputClass, Select } from "@/components/ui";
+import { ProviderSelect } from "@/components/ProviderSelect";
+import { DEFAULT_PROVIDER, PHONE_PROVIDERS } from "@/lib/centers/phone";
 import { initialFormState } from "@/lib/formState";
 import { PHONE_STATUS_LABEL } from "@/lib/status";
 import { savePhone } from "@/server/actions/centers";
@@ -54,21 +56,8 @@ export function PhoneForm({ phone = EMPTY }: { phone?: PhoneFormValues }) {
           className={`${inputClass} tabular-nums`}
         />
       </Field>
-      <Field label="ระบบ" htmlFor="provider" errors={errors.provider} hint="ค่ายผู้ให้บริการ เช่น TRUE, AIS">
-        <input
-          id="provider"
-          name="provider"
-          list="provider-options"
-          defaultValue={v.provider}
-          required
-          aria-invalid={!!errors.provider}
-          className={inputClass}
-        />
-        <datalist id="provider-options">
-          {PROVIDER_SUGGESTIONS.map((p) => (
-            <option key={p} value={p} />
-          ))}
-        </datalist>
+      <Field label="ระบบ" htmlFor="provider" errors={errors.provider} hint="ค่ายผู้ให้บริการ">
+        <ProviderSelect id="provider" name="provider" options={PHONE_PROVIDERS} defaultValue={v.provider} invalid={!!errors.provider} />
       </Field>
       <Field label="ผู้ใช้บริการ" htmlFor="name" errors={errors.name} hint="ฝ่ายหรือหน่วยงานที่ใช้เบอร์ เช่น รัฐกิจสัมพันธ์">
         <input id="name" name="name" defaultValue={v.name} required aria-invalid={!!errors.name} className={inputClass} />
@@ -107,20 +96,20 @@ export function PhoneForm({ phone = EMPTY }: { phone?: PhoneFormValues }) {
         />
       </Field>
       <Field label="สถานะ" htmlFor="status" errors={errors.status} hint="เบอร์ที่ยกเลิกแล้ว จะเบิกไม่ได้">
-        <select id="status" name="status" defaultValue={v.status} className={inputClass}>
+        <Select id="status" name="status" defaultValue={v.status}>
           {Object.entries(PHONE_STATUS_LABEL).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
 
       <div className="flex gap-2 sm:col-span-2">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" icon={Check} disabled={pending}>
           {pending ? "กำลังบันทึก…" : "บันทึก"}
         </Button>
-        <ButtonLink href="/admin/phones" variant="secondary">
+        <ButtonLink href="/admin/phones" variant="secondary" icon={X}>
           ยกเลิก
         </ButtonLink>
       </div>

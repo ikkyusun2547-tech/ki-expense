@@ -1,6 +1,6 @@
 "use client";
 
-import { Calculator, CheckCircle, Receipt, ShieldCheck } from "lucide-react";
+import { Calculator, CheckCircle, Receipt, ShieldCheck, UserPlus, X } from "lucide-react";
 import { useActionState, useState } from "react";
 import type { Role } from "@/generated/prisma/enums";
 import { Alert, Button, ButtonLink, cx, Field, inputClass, type IconType } from "@/components/ui";
@@ -35,11 +35,11 @@ export function CreateUserForm() {
               key={r}
               className={cx(
                 "flex cursor-pointer gap-3 rounded-lg border p-4 transition",
-                role === r ? "border-emerald-600 bg-emerald-50/60 ring-1 ring-emerald-600" : "border-slate-200 hover:border-slate-300",
+                role === r ? "border-brand-600 bg-brand-50/60 ring-1 ring-brand-600" : "border-slate-200 hover:border-slate-300",
               )}
             >
               <input type="radio" name="role" value={r} checked={role === r} onChange={() => setRole(r)} className="sr-only" />
-              <Icon className={cx("mt-0.5 size-5 shrink-0", role === r ? "text-emerald-700" : "text-slate-400")} aria-hidden />
+              <Icon className={cx("mt-0.5 size-5 shrink-0", role === r ? "text-brand-700" : "text-slate-400")} aria-hidden />
               <span>
                 <span className="block text-sm font-semibold text-slate-900">{ROLE_LABEL[r]}</span>
                 <span className="block text-xs text-slate-500">{description}</span>
@@ -101,10 +101,10 @@ export function CreateUserForm() {
       </div>
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" icon={UserPlus} disabled={pending}>
           {pending ? "กำลังสร้าง…" : `สร้างบัญชี${ROLE_LABEL[role]}`}
         </Button>
-        <ButtonLink href="/admin/users" variant="secondary">
+        <ButtonLink href="/admin/users" variant="secondary" icon={X}>
           ยกเลิก
         </ButtonLink>
       </div>

@@ -21,7 +21,7 @@ describe("ตัวเลขงานค้างบนเมนู", () => {
   it("แต่ละบทบาทเห็นเฉพาะเมนูของตัวเอง", async () => {
     expect(Object.keys(await getNavCounts(await asUser("APPROVER"), TODAY)).every((k) => k === "/approvals")).toBe(true);
     expect(Object.keys(await getNavCounts(await asUser("ACCOUNTING"), TODAY)).every((k) => k === "/accounting")).toBe(true);
-    expect(Object.keys(await getNavCounts(await asUser("CREATOR"), TODAY)).every((k) => ["/summary", "/requests"].includes(k))).toBe(true);
+    expect(Object.keys(await getNavCounts(await asUser("CREATOR"), TODAY)).every((k) => /^\/(summary|requests)\?kind=(INTERNET|PHONE)$/.test(k))).toBe(true);
   });
 
   it("ส่งขออนุมัติ → ผู้อนุมัติคนนั้น +1 (คนอื่นไม่เพิ่ม); อนุมัติ → ฝ่ายบัญชี +1; ใบร่างของผู้จัดทำนับด้วย", async () => {
@@ -29,13 +29,15 @@ describe("ตัวเลขงานค้างบนเมนู", () => {
       approver: await countOf("APPROVER", "/approvals"),
       approver2: await countOf("APPROVER2", "/approvals"),
       accounting: await countOf("ACCOUNTING", "/accounting"),
-      drafts: await countOf("CREATOR", "/requests"),
+      drafts: await countOf("CREATOR", "/requests?kind=INTERNET"),
+      phoneDrafts: await countOf("CREATOR", "/requests?kind=PHONE"),
     };
 
     const c = await center();
     await loginAs("CREATOR");
     idFrom(await save(valid(c.id))); // ใบร่าง
-    expect(await countOf("CREATOR", "/requests")).toBe(before.drafts + 1);
+    expect(await countOf("CREATOR", "/requests?kind=INTERNET")).toBe(before.drafts + 1);
+    expect(await countOf("CREATOR", "/requests?kind=PHONE")).toBe(before.phoneDrafts); // ใบค่าอินเทอร์เน็ตไม่นับในเมนูค่าโทรศัพท์
 
     const c2 = await center();
     const id = await pendingRequest(c2.id);

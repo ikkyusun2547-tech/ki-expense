@@ -1,7 +1,8 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import { useActionState } from "react";
-import { Alert, Button, ButtonLink, Field, inputClass } from "@/components/ui";
+import { Alert, Button, ButtonLink, Field, inputClass, Select } from "@/components/ui";
 import { initialFormState } from "@/lib/formState";
 import { ROLE_LABEL } from "@/lib/status";
 import { updateUser } from "@/server/actions/users";
@@ -52,28 +53,28 @@ export function EditUserForm({ user, isSelf }: { user: EditUserValues; isSelf: b
         <input id="email" name="email" type="email" defaultValue={v.email} aria-invalid={!!errors.email} className={inputClass} />
       </Field>
       <Field label="บทบาท" htmlFor="role" errors={errors.role} hint={isSelf ? "เปลี่ยนบทบาทของตัวเองไม่ได้" : undefined}>
-        <select id="role" name="role" defaultValue={v.role} disabled={isSelf} className={inputClass}>
+        <Select id="role" name="role" defaultValue={v.role} disabled={isSelf}>
           {Object.entries(ROLE_LABEL).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
+        </Select>
         {/* select ที่ disabled ไม่ถูกส่งไปกับฟอร์ม จึงส่งค่าเดิมแทน */}
         {isSelf && <input type="hidden" name="role" value={user.role} />}
       </Field>
       <Field label="สถานะบัญชี" htmlFor="active" hint={isSelf ? "ปิดบัญชีของตัวเองไม่ได้" : "ปิดใช้งานแล้วผู้ใช้จะถูกออกจากระบบทันที"}>
-        <select id="active" name="active" defaultValue={v.active} disabled={isSelf} className={inputClass}>
+        <Select id="active" name="active" defaultValue={v.active} disabled={isSelf}>
           <option value="true">ใช้งาน</option>
           <option value="false">ปิดใช้งาน</option>
-        </select>
+        </Select>
         {isSelf && <input type="hidden" name="active" value="true" />}
       </Field>
       <div className="flex gap-2 sm:col-span-2">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" icon={Check} disabled={pending}>
           {pending ? "กำลังบันทึก…" : "บันทึก"}
         </Button>
-        <ButtonLink href="/admin/users" variant="secondary">
+        <ButtonLink href="/admin/users" variant="secondary" icon={X}>
           ยกเลิก
         </ButtonLink>
       </div>

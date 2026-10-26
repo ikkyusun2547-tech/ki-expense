@@ -8,6 +8,7 @@ import {
   beYear,
   formatBEDate,
   formatThaiDate,
+  formatThaiDateRange,
   formatThaiDateTime,
   fromISODate,
   thaiMonthName,
@@ -106,5 +107,12 @@ describe("ช่องกรอกวันที่แบบไทย", () => {
     expect(maskBEInput("0410")).toBe("04/10");
     expect(maskBEInput("04/1")).toBe("04/1");
     expect(maskBEInput("04a10b2569999")).toBe("04/10/2569");
+  });
+});
+
+describe("formatThaiDateRange", () => {
+  it("ปีเดียวกันพิมพ์ปีครั้งเดียว / ข้ามปีพิมพ์ทั้งสองฝั่ง", () => {
+    expect(formatThaiDateRange("2026-09-21", "2026-10-20")).toBe("21 ก.ย. – 20 ต.ค. 2569");
+    expect(formatThaiDateRange("2026-12-16", "2027-01-15")).toBe("16 ธ.ค. 2569 – 15 ม.ค. 2570");
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleX, Stamp } from "lucide-react";
+import { CircleX, Stamp, X } from "lucide-react";
 import { useActionState, useState } from "react";
 import { Button, inputClass } from "@/components/ui";
 import { initialFormState } from "@/lib/formState";
@@ -27,7 +27,7 @@ export function ApproveButton({ id }: { id: string }) {
             className={`${inputClass} h-auto py-2`}
           />
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setRejecting(false)}>
+            <Button type="button" variant="secondary" size="sm" icon={X} onClick={() => setRejecting(false)}>
               ยกเลิก
             </Button>
             <Button type="submit" name="action" value="REJECT" variant="danger" size="sm" icon={CircleX} disabled={pending}>
@@ -40,7 +40,7 @@ export function ApproveButton({ id }: { id: string }) {
           <Button type="button" variant="danger" size="sm" icon={CircleX} onClick={() => setRejecting(true)}>
             ไม่อนุมัติ
           </Button>
-          <Button type="submit" name="action" value="APPROVE" size="sm" icon={Stamp} disabled={pending} className="w-28">
+          <Button type="submit" name="action" value="APPROVE" size="sm" icon={Stamp} disabled={pending}>
             {pending ? "กำลังอนุมัติ…" : "อนุมัติ"}
           </Button>
         </div>

@@ -1,4 +1,4 @@
-import { CircleCheck, FilePlus, FileText, Hourglass, Inbox, Plus, Receipt, Send } from "lucide-react";
+import { CircleCheck, Eye, FilePlus, FileText, Hourglass, Inbox, Plus, Receipt, Search, Send, X } from "lucide-react";
 import type { RequestStatus, ServiceKind } from "@/generated/prisma/enums";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import {
@@ -21,7 +21,8 @@ import {
   type BadgeTone,
   type IconType,
 } from "@/components/ui";
-import { centerCode, kindTag } from "@/lib/centers/phone";
+import { kindHref } from "@/lib/auth/routes";
+import { centerLabel, kindTag } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { canCreateRequest, returnedBy, SERVICE_KIND_LABEL, STATUS_LABEL } from "@/lib/status";
 import { formatThaiDate, toISODate } from "@/lib/thai/date";
@@ -86,8 +87,8 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
     <>
       <PageHeader
         icon={Receipt}
-        title="ใบเบิก"
-        description="ใบเบิกทุกศูนย์และทุกเบอร์ (ล่าสุด 200 ใบ)"
+        title={kind ? `ใบเบิกค่า${SERVICE_KIND_LABEL[kind]}` : "ใบเบิก"}
+        description={`${kind === "PHONE" ? "ทุกเบอร์" : kind ? "ทุกศูนย์" : "ทุกศูนย์และทุกเบอร์"} (ล่าสุด 200 ใบ)`}
         actions={
           canCreateRequest(user.role) && (
             <ButtonLink href="/requests/new" icon={Plus}>
@@ -113,12 +114,11 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
       </div>
 
       <FilterBar>
-        <SearchInput defaultValue={q} placeholder="ค้นหาศูนย์ / รหัสลูกค้า / เบอร์ / เลขที่ใบแจ้งหนี้" />
-        <FilterSelect
-          name="kind"
-          label="ประเภท"
-          defaultValue={kind}
-          options={[{ value: "", label: "ทุกประเภท" }, ...KINDS.map((k) => ({ value: k, label: `ค่า${SERVICE_KIND_LABEL[k]}` }))]}
+        {/* ประเภทเลือกจากเมนู — คงไว้ตอนค้นหา */}
+        {kind && <input type="hidden" name="kind" value={kind} />}
+        <SearchInput
+          defaultValue={q}
+          placeholder={kind === "PHONE" ? "ค้นหาเบอร์ / ผู้ใช้บริการ / เลขที่ใบแจ้งหนี้" : "ค้นหาศูนย์ / รหัสลูกค้า / เลขที่ใบแจ้งหนี้"}
         />
         <FilterSelect
           name="status"
@@ -127,11 +127,11 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
           options={[{ value: "", label: "ทุกสถานะ" }, ...STATUSES.map((s) => ({ value: s, label: STATUS_LABEL[s] }))]}
         />
         <div className="flex gap-2">
-          <Button type="submit" variant="secondary" className="flex-1 sm:flex-none">
+          <Button type="submit" variant="secondary" icon={Search} className="flex-1 sm:flex-none">
             ค้นหา
           </Button>
-          {(q || status || kind) && (
-            <ButtonLink href="/requests" variant="ghost">
+          {(q || status) && (
+            <ButtonLink href={kind ? kindHref("/requests", kind) : "/requests"} variant="ghost" icon={X}>
               ล้างตัวกรอง
             </ButtonLink>
           )}
@@ -142,7 +142,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
         <table className={tableClass}>
           <thead>
             <tr>
-              <th className={thClass}>ศูนย์ / เบอร์</th>
+              <th className={thClass}>{kind === "PHONE" ? "ผู้ใช้บริการ / เบอร์" : kind ? "ศูนย์" : "ศูนย์ / เบอร์"}</th>
               <th className={thClass}>รอบบริการ</th>
               <th className={thClass}>เลขที่ใบแจ้งหนี้</th>
               <th className={`${thClass} text-right`}>ยอด (บาท)</th>
@@ -155,7 +155,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
             {requests.map((r) => (
               <tr key={r.id} className={rowClass}>
                 <td className={tdClass}>
-                  <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                  <NameCell {...centerLabel(r.center)} tag={kind ? undefined : kindTag(r.center)} href={`/requests/${r.id}`} />
                 </td>
                 <td className={`${tdClass} whitespace-nowrap`}>
                   {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
@@ -170,7 +170,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                   </div>
                 </td>
                 <td className={`${tdClass} text-right`}>
-                  <RowLink href={`/requests/${r.id}`}>ดู</RowLink>
+                  <RowLink href={`/requests/${r.id}`} icon={Eye}>ดู</RowLink>
                 </td>
               </tr>
             ))}

@@ -36,7 +36,7 @@ $appAction = New-ScheduledTaskAction -Execute $ps `
   -WorkingDirectory $AppDir
 $appSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
   -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-Register-ScheduledTask -TaskName "InternetExpense-App" -Description "ระบบเบิกค่าอินเทอร์เน็ต (next start)" `
+Register-ScheduledTask -TaskName "InternetExpense-App" -Description "ระบบเบิกค่าบริการ (next start)" `
   -Action $appAction -Trigger (New-ScheduledTaskTrigger -AtStartup) -Principal $system -Settings $appSettings | Out-Null
 
 # --- สำรองข้อมูลทุกคืน ---
@@ -44,7 +44,7 @@ Unregister-ScheduledTask -TaskName "InternetExpense-Backup" -Confirm:$false -Err
 $backupAction = New-ScheduledTaskAction -Execute $ps `
   -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$AppDir\scripts\backup.ps1`" -EnvFile `"$AppDir\.env`" -Destination `"$BackupDir`""
 $backupSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 1) -StartWhenAvailable -AllowStartIfOnBatteries
-Register-ScheduledTask -TaskName "InternetExpense-Backup" -Description "สำรองข้อมูลระบบเบิกค่าอินเทอร์เน็ต" `
+Register-ScheduledTask -TaskName "InternetExpense-Backup" -Description "สำรองข้อมูลระบบเบิกค่าบริการ" `
   -Action $backupAction -Trigger (New-ScheduledTaskTrigger -Daily -At $BackupTime) -Principal $system -Settings $backupSettings | Out-Null
 
 # --- firewall ในวงแลน ---

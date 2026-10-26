@@ -1,7 +1,9 @@
 // หมายเลขโทรศัพท์ในทะเบียนเก็บเป็นตัวเลขล้วน (ใช้เป็นรหัสค้นหา) และแสดงแบบมีขีดตามฟอร์มบันทึกภายใน
 
 export const DEFAULT_PROVIDER = "TRUE";
-export const PROVIDER_SUGGESTIONS = ["TRUE", "AIS", "DTAC", "NT"];
+// ค่ายที่รู้จักใน drop-down "ระบบ" ของทะเบียน — ค่ายอื่นเลือก "อื่น ๆ (พิมพ์เอง)" (components/ProviderSelect)
+export const PHONE_PROVIDERS = ["TRUE", "AIS", "DTAC", "NT"];
+export const INTERNET_PROVIDERS = ["3BB", "TRUE", "AIS", "NT"];
 
 // รับได้หลายรูปแบบ: 097-3378822, 097 337 8822, +66 97 337 8822
 // Excel มักตัดเลข 0 ตัวหน้าทิ้ง (973378822) → เติมกลับให้ เพราะเบอร์ไทยขึ้นต้นด้วย 0 เสมอ
@@ -30,4 +32,12 @@ export function kindTag(center: { kind: string }): string | undefined {
 // รหัสที่แสดงคู่กับชื่อในหน้ารายการ: ศูนย์ = รหัสลูกค้า, เบอร์ = หมายเลขแบบมีขีด
 export function centerCode(center: { kind: string; customerCode: string }): string {
   return center.kind === "PHONE" ? formatPhone(center.customerCode) : center.customerCode;
+}
+
+// ชื่อ + บรรทัดรองในแถวรายการ (NameCell): ศูนย์ = ชื่อศูนย์ / รหัสลูกค้า,
+// เบอร์ = หมายเลข / "ผู้ใช้: <ฝ่าย>" — ให้เบอร์เป็นตัวหลัก ไม่ให้ชื่อฝ่าย (เช่น "ฝ่ายบัญชี") สับสนกับชื่อบทบาท
+export function centerLabel(center: { kind: string; name: string; customerCode: string }): { name: string; code: string } {
+  return center.kind === "PHONE"
+    ? { name: formatPhone(center.customerCode), code: `ผู้ใช้: ${center.name}` }
+    : { name: center.name, code: center.customerCode };
 }

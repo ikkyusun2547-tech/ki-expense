@@ -80,9 +80,9 @@ describe("ฟอร์มใบเบิก: เลือกผู้อนุ�
     await loginAs("CREATOR");
     const approverId = await userId("APPROVER");
     const result = await save({ ...valid(c.id), approverId, intent: "submit" });
-    expect(result).toMatchObject({ redirect: expect.stringMatching(/^\/summary\?sent=/) });
+    expect(result).toMatchObject({ redirect: expect.stringMatching(/^\/summary\?kind=INTERNET&sent=/) });
 
-    const id = (result as { redirect: string }).redirect.split("=")[1];
+    const id = (result as { redirect: string }).redirect.split("sent=")[1];
     const r = await requestOf(id);
     expect(r).toMatchObject({ status: "PENDING", approverId, approverName: "ทดสอบ approver", approverTitle: "ผู้จัดการส่วน" });
     expect(r.logs.map((l) => l.action)).toEqual(["CREATE", "SUBMIT"]);

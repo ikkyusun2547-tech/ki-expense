@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Building, CircleCheck, CircleX, Inbox, Plus, Upload } from "lucide-react";
+import { ArrowRightLeft, Building, CircleCheck, CircleX, Inbox, Pencil, Plus, Search, Upload, X } from "lucide-react";
 import type { CenterStatus } from "@/generated/prisma/enums";
 import { CenterStatusBadge } from "@/components/StatusBadge";
 import {
@@ -105,11 +105,11 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
           options={[{ value: "", label: "ทุกสถานะ" }, ...STATUSES.map((s) => ({ value: s, label: CENTER_STATUS_LABEL[s] }))]}
         />
         <div className="flex gap-2">
-          <Button type="submit" variant="secondary" className="flex-1 sm:flex-none">
+          <Button type="submit" variant="secondary" icon={Search} className="flex-1 sm:flex-none">
             ค้นหา
           </Button>
           {(q || status) && (
-            <ButtonLink href="/admin/centers" variant="ghost">
+            <ButtonLink href="/admin/centers" variant="ghost" icon={X}>
               ล้างตัวกรอง
             </ButtonLink>
           )}
@@ -145,7 +145,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
                 </td>
                 <td className={`${tdClass} text-right tabular-nums`}>{c._count.requests}</td>
                 <td className={`${tdClass} text-right`}>
-                  <RowLink href={`/admin/centers/${c.id}`}>แก้ไข</RowLink>
+                  <RowLink href={`/admin/centers/${c.id}`} icon={Pencil}>แก้ไข</RowLink>
                 </td>
               </tr>
             ))}

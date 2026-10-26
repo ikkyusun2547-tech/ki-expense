@@ -1,8 +1,10 @@
 "use client";
 
+import { Check, X } from "lucide-react";
 import { useActionState } from "react";
-import { Alert, Button, ButtonLink, Field, inputClass } from "@/components/ui";
-import { PROVIDER_SUGGESTIONS } from "@/lib/centers/phone";
+import { Alert, Button, ButtonLink, Field, inputClass, Select } from "@/components/ui";
+import { ProviderSelect } from "@/components/ProviderSelect";
+import { INTERNET_PROVIDERS } from "@/lib/centers/phone";
 import { initialFormState } from "@/lib/formState";
 import { INTERNET_PROVIDER } from "@/lib/pdf/memoData";
 import { CENTER_STATUS_LABEL } from "@/lib/status";
@@ -61,28 +63,23 @@ export function CenterForm({ center = EMPTY }: { center?: CenterFormValues }) {
         <input id="dueDay" name="dueDay" type="number" min={1} max={31} defaultValue={v.dueDay} required aria-invalid={!!errors.dueDay} className={`${inputClass} tabular-nums`} />
       </Field>
       <Field label="สถานะ" htmlFor="status" errors={errors.status} hint="ศูนย์ที่ย้าย/ปิด จะเบิกไม่ได้">
-        <select id="status" name="status" defaultValue={v.status} className={inputClass}>
+        <Select id="status" name="status" defaultValue={v.status}>
           {Object.entries(CENTER_STATUS_LABEL).map(([value, label]) => (
             <option key={value} value={value}>
               {label}
             </option>
           ))}
-        </select>
+        </Select>
       </Field>
-      <Field label="ระบบ (ค่าย)" htmlFor="provider" errors={errors.provider} hint="พิมพ์ในใบเบิก เช่น 3BB, TRUE, AIS">
-        <input id="provider" name="provider" list="internet-providers" defaultValue={v.provider} required aria-invalid={!!errors.provider} className={inputClass} />
-        <datalist id="internet-providers">
-          {[INTERNET_PROVIDER, ...PROVIDER_SUGGESTIONS.filter((p) => p !== "DTAC")].map((p) => (
-            <option key={p} value={p} />
-          ))}
-        </datalist>
+      <Field label="ระบบ (ค่าย)" htmlFor="provider" errors={errors.provider} hint="พิมพ์ในใบเบิก">
+        <ProviderSelect id="provider" name="provider" options={INTERNET_PROVIDERS} defaultValue={v.provider} invalid={!!errors.provider} />
       </Field>
 
       <div className="flex gap-2 sm:col-span-2">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" icon={Check} disabled={pending}>
           {pending ? "กำลังบันทึก…" : "บันทึก"}
         </Button>
-        <ButtonLink href="/admin/centers" variant="secondary">
+        <ButtonLink href="/admin/centers" variant="secondary" icon={X}>
           ยกเลิก
         </ButtonLink>
       </div>

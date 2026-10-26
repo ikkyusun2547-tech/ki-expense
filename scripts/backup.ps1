@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  สำรองข้อมูลระบบเบิกค่าอินเทอร์เน็ต: ฐานข้อมูล (pg_dump) + ไฟล์ใบแจ้งหนี้
+  สำรองข้อมูลระบบเบิกค่าบริการ: ฐานข้อมูล (pg_dump) + ไฟล์ใบแจ้งหนี้
 
 .DESCRIPTION
   - ฐานข้อมูล: <Destination>\db\internet_expense_<วันเวลา>.dump (รูปแบบ custom ของ pg_restore)

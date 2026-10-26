@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleX, Send, Stamp, Trash, Undo2 } from "lucide-react";
+import { CircleX, Send, Stamp, Trash, Undo2, X } from "lucide-react";
 import { useActionState, useState } from "react";
 import { Alert, Button, Field, inputClass } from "@/components/ui";
 import { initialFormState } from "@/lib/formState";
@@ -73,12 +73,12 @@ export function StatusActions({
         <>
           {canApprove && (
             <Button type="button" variant="danger" icon={CircleX} onClick={() => setNoteFor("REJECT")}>
-              ไม่อนุมัติ…
+              ไม่อนุมัติ
             </Button>
           )}
           {canRevert && (
             <Button type="button" variant="secondary" icon={Undo2} onClick={() => setNoteFor("REVERT")}>
-              ย้อนสถานะ…
+              ย้อนสถานะ
             </Button>
           )}
         </>
@@ -122,7 +122,7 @@ function NoteBox({ kind, pending, onCancel }: { kind: "REJECT" | "REVERT"; pendi
         <Button type="submit" name="action" value={kind} variant={kind === "REJECT" ? "danger" : "secondary"} icon={c.icon} disabled={pending}>
           {c.button}
         </Button>
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        <Button type="button" variant="secondary" icon={X} onClick={onCancel}>
           ยกเลิก
         </Button>
       </div>

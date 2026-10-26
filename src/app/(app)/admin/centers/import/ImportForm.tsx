@@ -78,7 +78,7 @@ export function ImportForm({ kind = "INTERNET" }: { kind?: ServiceKind }) {
           นำเข้า{k.registry}แล้ว {state.imported} {k.noun}
         </Alert>
         <div>
-          <Link href={k.href} className="font-medium text-emerald-700 hover:underline">
+          <Link href={k.href} className="font-medium text-brand-700 hover:underline">
             ไปหน้า{k.registry} →
           </Link>
         </div>
@@ -95,20 +95,16 @@ export function ImportForm({ kind = "INTERNET" }: { kind?: ServiceKind }) {
         <p className="mt-1">
           จาก Excel: <b>ไฟล์ → บันทึกเป็น → CSV UTF-8</b> · {k.upsert}
         </p>
-        <button
-          type="button"
-          onClick={downloadTemplate}
-          className="mt-2 inline-flex items-center gap-1 font-medium text-emerald-700 hover:underline"
-        >
-          <Download className="size-4" aria-hidden /> ดาวน์โหลดไฟล์ตัวอย่าง
-        </button>
+        <Button type="button" variant="secondary" size="sm" icon={Download} onClick={downloadTemplate} className="mt-2">
+          ดาวน์โหลดไฟล์ตัวอย่าง
+        </Button>
       </div>
 
       <label
         htmlFor="file"
         className={cx(
-          "flex h-12 cursor-pointer items-center gap-2 rounded-lg border border-dashed px-4 text-sm transition hover:border-emerald-500 hover:bg-emerald-50/50",
-          fileName ? "border-emerald-400 bg-emerald-50/50 text-emerald-800" : "border-slate-300 bg-white text-slate-500",
+          "flex h-12 cursor-pointer items-center gap-2 rounded-lg border border-dashed px-4 text-sm transition hover:border-brand-500 hover:bg-brand-50/50",
+          fileName ? "border-brand-400 bg-brand-50/50 text-brand-800" : "border-slate-300 bg-white text-slate-500",
         )}
       >
         <Paperclip className="size-4 shrink-0" aria-hidden />

@@ -1,26 +1,31 @@
-import { Search } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 
 // ชิ้นส่วน UI พื้นฐาน (ไม่มี state ใช้ได้ทั้ง Server/Client Component)
-// โทนสี: เขียว emerald = หลัก, slate = ตัวอักษร/เส้น, แดง/เหลือง/ฟ้า = สถานะ
+// โทนสี: brand (กรมท่า, globals.css) = หลัก, slate = ตัวอักษร/เส้น, เขียว/แดง/เหลือง/ฟ้า = สถานะ
 
 export type IconType = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 
 export const cx = (...classes: (string | false | null | undefined)[]) => classes.filter(Boolean).join(" ");
 
 // ---------- ปุ่ม ----------
+// มาตรฐานทั้งโปรเจกต์ (ผู้ใช้ขอให้ปุ่มเป็นแบบเดียวกันหมด 2026-10-26):
+// - primary = งานหลักของหน้า/แถว (ทึบเขียว) · secondary = งานรอง ดู/แก้ไข/ยกเลิก/กลับ/ค้นหา/ดาวน์โหลด (ขอบเทา)
+//   danger = ลบ/ไม่อนุมัติ (ขอบแดง) · ghost = ตัวช่วยเล็ก ๆ ล้างตัวกรอง/เลือกทั้งหมด (ไม่มีขอบ)
+// - ทุกปุ่มมีไอคอน · md = ในหน้า/ฟอร์ม (และเมื่ออยู่ข้างช่องกรอก) · sm = ในแถวตาราง/การ์ด
+// - ห้ามทำลิงก์ตัวหนังสือแทนปุ่ม (ลิงก์ตัวหนังสือใช้ได้เฉพาะในประโยค/ค่าข้อมูล เช่น "เปิดไฟล์" ในตาราง)
 
 const BUTTON_BASE =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600/40 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50";
 
 const BUTTON_SIZE = {
   md: "h-10 px-4 text-sm",
-  sm: "h-8 px-3 text-xs",
+  sm: "h-8 px-3 text-sm",
 };
 
 const BUTTON_VARIANT = {
-  primary: "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800 active:bg-emerald-900",
+  primary: "bg-brand-700 text-white shadow-sm hover:bg-brand-800 active:bg-brand-900",
   secondary: "border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 hover:text-slate-900",
   // ปุ่มทำลายข้อมูลใช้แบบเส้นขอบ ไม่ให้เด่นกว่าปุ่มหลัก
   danger: "border border-red-200 bg-white text-red-700 hover:border-red-300 hover:bg-red-50",
@@ -67,7 +72,7 @@ export function ButtonAnchor({ variant = "primary", size = "md", icon, className
 
 // ไม่มีความกว้าง — ใช้เมื่อต้องกำหนดความกว้างเอง (Tailwind class ที่ชนกันจะไม่ทับกันตามลำดับที่เขียน)
 const inputBase =
-  "h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 aria-[invalid=true]:border-red-400 aria-[invalid=true]:ring-red-500/10 disabled:bg-slate-50 disabled:text-slate-500";
+  "h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-4 focus:ring-brand-600/10 aria-[invalid=true]:border-red-400 aria-[invalid=true]:ring-red-500/10 disabled:bg-slate-50 disabled:text-slate-500";
 
 export const inputClass = `${inputBase} w-full`;
 
@@ -94,6 +99,19 @@ export function SearchInput({ defaultValue, placeholder }: { defaultValue?: stri
   );
 }
 
+// drop-down มาตรฐานทั้งโปรเจกต์ (ผู้ใช้ขอให้ดีไซน์ไปทางเดียวกัน 2026-10-26):
+// ลูกศร ⌄ ของระบบเอง (ซ่อนลูกศรเบราว์เซอร์ด้วย appearance-none) สูง/ขอบ/โฟกัสเหมือนช่องกรอก — className = ความกว้างของกล่อง
+export function Select({ className, children, ...props }: ComponentProps<"select">) {
+  return (
+    <div className={cx("relative", className ?? "w-full")}>
+      <select className={cx(inputBase, "w-full cursor-pointer appearance-none pr-9 disabled:cursor-not-allowed")} {...props}>
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" aria-hidden />
+    </div>
+  );
+}
+
 export function FilterSelect({
   name,
   label,
@@ -106,13 +124,13 @@ export function FilterSelect({
   options: { value: string; label: string }[];
 }) {
   return (
-    <select name={name} defaultValue={defaultValue ?? ""} aria-label={label} className={`${inputBase} w-full sm:w-44`}>
+    <Select name={name} defaultValue={defaultValue ?? ""} aria-label={label} className="w-full sm:w-44">
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 
@@ -203,7 +221,7 @@ export function PageHeader({
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div className="flex items-start gap-3">
         {Icon && (
-          <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+          <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
             <Icon className="size-5" aria-hidden />
           </div>
         )}
@@ -226,7 +244,7 @@ export function Card({ className, flush, children }: { className?: string; flush
 export function StepTitle({ step, title, hint }: { step: number; title: string; hint?: string }) {
   return (
     <div className="mb-4 flex items-start gap-3">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-sm font-semibold text-white">{step}</span>
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-700 text-sm font-semibold text-white">{step}</span>
       <div>
         <div className="font-semibold text-slate-900">{title}</div>
         {hint && <div className="text-xs text-slate-500">{hint}</div>}
@@ -285,7 +303,7 @@ export function StatCard({
   );
   const box = cx(
     "block rounded-xl border bg-white p-3 shadow-sm transition sm:p-5",
-    active ? "border-emerald-500 ring-2 ring-emerald-500/20" : "border-slate-200",
+    active ? "border-brand-500 ring-2 ring-brand-500/20" : "border-slate-200",
     href && "hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md",
   );
   return href ? (
@@ -308,16 +326,12 @@ export const thClass = "whitespace-nowrap border-b border-slate-200 bg-slate-50/
 export const tdClass = "border-b border-slate-100 px-4 py-3 align-middle text-slate-700";
 export const rowClass = "transition-colors hover:bg-slate-50/80";
 
-// ลิงก์ในคอลัมน์ท้ายตาราง ("ดู", "แก้ไข")
-export function RowLink({ href, children }: { href: string; children: ReactNode }) {
+// ปุ่มในคอลัมน์ท้ายตาราง ("ดู", "แก้ไข") — ปุ่มรองขนาดเล็กแบบเดียวกับปุ่มอื่นในแถว
+export function RowLink({ href, icon, children }: { href: string; icon: IconType; children: ReactNode }) {
   return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-sm font-medium text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-    >
+    <ButtonLink href={href} variant="secondary" size="sm" icon={icon}>
       {children}
-      <span aria-hidden>›</span>
-    </Link>
+    </ButtonLink>
   );
 }
 
@@ -338,7 +352,7 @@ export function NameCell({ name, code, href, tag }: { name: string; code: string
   return (
     <div>
       {href ? (
-        <Link href={href} className="font-medium text-slate-900 hover:text-emerald-700 hover:underline">
+        <Link href={href} className="font-medium text-slate-900 hover:text-brand-700 hover:underline">
           {name}
         </Link>
       ) : (

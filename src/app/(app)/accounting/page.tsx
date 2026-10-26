@@ -1,6 +1,7 @@
 import { Banknote, Calculator, CircleCheck, Clock, Download, Inbox, Paperclip, TriangleAlert, Wallet } from "lucide-react";
 import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
+import { PhoneChargesNote } from "@/components/PhoneCharges";
 import {
   Alert,
   Button,
@@ -16,7 +17,7 @@ import {
   tdClass,
   thClass,
 } from "@/components/ui";
-import { centerCode, kindTag } from "@/lib/centers/phone";
+import { centerLabel, kindTag } from "@/lib/centers/phone";
 import { formatAmount, toSatang } from "@/lib/money";
 import { daysUntil } from "@/lib/rules/centerSummary";
 import { beYear, formatThaiDate, thaiMonthName, toISODate, todayISO } from "@/lib/thai/date";
@@ -53,11 +54,7 @@ export default async function AccountingPage({ searchParams }: PageProps<"/accou
       <PageHeader
         icon={Calculator}
         title="ฝ่ายบัญชี"
-        description={
-          user.role === "ACCOUNTING"
-            ? "ใบเบิกที่อนุมัติแล้ว — ใกล้ครบกำหนดอยู่บนสุด"
-            : "ใบที่อนุมัติแล้วรอจ่าย (ดูอย่างเดียว)"
-        }
+        description={user.role === "ACCOUNTING" ? "ใบเบิกที่อนุมัติแล้ว — ใกล้ครบกำหนดอยู่บนสุด" : "ใบที่อนุมัติแล้วรอจ่าย (ดูอย่างเดียว)"}
       />
 
       {/* paid = จำนวนใบที่บันทึกสำเร็จ, fail = ใบที่บันทึกไม่ได้ (บันทึกทีละหลายใบ) */}
@@ -98,7 +95,7 @@ export default async function AccountingPage({ searchParams }: PageProps<"/accou
             aria-current={tab === t.key ? "page" : undefined}
             className={cx(
               "flex items-center gap-1.5 rounded-md px-4 py-1.5",
-              tab === t.key ? "bg-emerald-700 font-medium text-white shadow-sm" : "text-slate-600 hover:bg-slate-100",
+              tab === t.key ? "bg-brand-700 font-medium text-white shadow-sm" : "text-slate-600 hover:bg-slate-100",
             )}
           >
             <t.icon className="size-4" aria-hidden />
@@ -137,11 +134,12 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                       <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
                     </span>
                   )}
-                  <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                  <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-bold tabular-nums text-slate-900">{formatAmount(r.amount)}</div>
                   <div className="text-xs text-slate-500">บาท</div>
+                  <PhoneChargesNote request={r} />
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
@@ -159,7 +157,9 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
           );
         })}
         {rows.length === 0 && (
-          <li className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">ไม่มีใบเบิกที่รอจ่าย</li>
+          <li className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
+            ไม่มีใบเบิกที่รอจ่าย
+          </li>
         )}
       </ul>
 
@@ -193,7 +193,7 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                       </div>
                     </td>
                     <td className={tdClass}>
-                      <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                      <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
                       {/* รอบบริการ + เลขที่ใบแจ้งหนี้ + ไฟล์ อยู่ใต้ชื่อศูนย์ เพื่อเหลือที่ให้ช่องบันทึกจ่ายในแถว */}
                       <div className="mt-1 whitespace-nowrap text-xs text-slate-500">
                         {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
@@ -203,8 +203,13 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                         <FileLink row={r} />
                       </div>
                     </td>
-                    <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(r.amount)}</td>
-                    <td className={`${tdClass} min-w-[25rem]`}>{canPay ? <PayAction row={r} today={today} /> : <span className="text-slate-300">–</span>}</td>
+                    <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>
+                      {formatAmount(r.amount)}
+                      <PhoneChargesNote request={r} />
+                    </td>
+                    <td className={`${tdClass} min-w-[25rem]`}>
+                      {canPay ? <PayAction row={r} today={today} /> : <span className="text-slate-300">–</span>}
+                    </td>
                   </tr>
                 );
               })}
@@ -228,7 +233,7 @@ function FileLink({ row }: { row: PendingRow }) {
       href={`/api/requests/${row.id}/invoice`}
       target="_blank"
       rel="noopener"
-      className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-emerald-700 hover:underline"
+      className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-brand-700 hover:underline"
     >
       <Paperclip className="size-3.5" aria-hidden /> เปิดไฟล์
     </a>
@@ -288,12 +293,15 @@ async function PaidTable({ today }: { today: string }) {
               <tr key={r.id} className={rowClass}>
                 <td className={`${tdClass} whitespace-nowrap`}>{r.paidDate && formatThaiDate(toISODate(r.paidDate))}</td>
                 <td className={tdClass}>
-                  <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                  <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
                 </td>
                 <td className={`${tdClass} whitespace-nowrap`}>
                   {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
                 </td>
-                <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(r.amount)}</td>
+                <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>
+                  {formatAmount(r.amount)}
+                  <PhoneChargesNote request={r} />
+                </td>
                 <td className={`${tdClass} tabular-nums`}>{r.paymentRef}</td>
               </tr>
             ))}
