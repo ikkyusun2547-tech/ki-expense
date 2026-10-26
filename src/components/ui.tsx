@@ -333,8 +333,8 @@ export function EmptyRow({ colSpan, icon: Icon, children }: { colSpan: number; i
   );
 }
 
-// ชื่อ + รหัสรองในคอลัมน์ตาราง
-export function NameCell({ name, code, href }: { name: string; code: string; href?: string }) {
+// ชื่อ + รหัสรองในคอลัมน์ตาราง; tag = ป้ายเล็กท้ายรหัส (เช่น ประเภท "โทรศัพท์")
+export function NameCell({ name, code, href, tag }: { name: string; code: string; href?: string; tag?: string }) {
   return (
     <div>
       {href ? (
@@ -344,7 +344,10 @@ export function NameCell({ name, code, href }: { name: string; code: string; hre
       ) : (
         <div className="font-medium text-slate-900">{name}</div>
       )}
-      <div className="text-xs tabular-nums text-slate-400">{code}</div>
+      <div className="text-xs tabular-nums text-slate-400">
+        {code}
+        {tag && <span className="ml-1.5 rounded bg-sky-50 px-1.5 py-px font-medium text-sky-700">{tag}</span>}
+      </div>
     </div>
   );
 }

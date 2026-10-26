@@ -26,6 +26,7 @@ export async function GET(request: Request) {
     month,
     rows.map((r) => ({
       paidDate: toISODate(r.paidDate!),
+      kind: r.center.kind,
       centerName: r.center.name,
       customerCode: centerCode(r.center),
       invoiceNo: r.invoiceNo,

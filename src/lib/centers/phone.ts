@@ -22,6 +22,11 @@ export function formatPhone(digits: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3)}`;
 }
 
+// ป้ายประเภทในแถวรายการ — แสดงเฉพาะค่าโทรศัพท์ (ส่วนใหญ่เป็นค่าอินเทอร์เน็ต ไม่ต้องติดป้ายทุกแถว)
+export function kindTag(center: { kind: string }): string | undefined {
+  return center.kind === "PHONE" ? "โทรศัพท์" : undefined;
+}
+
 // รหัสที่แสดงคู่กับชื่อในหน้ารายการ: ศูนย์ = รหัสลูกค้า, เบอร์ = หมายเลขแบบมีขีด
 export function centerCode(center: { kind: string; customerCode: string }): string {
   return center.kind === "PHONE" ? formatPhone(center.customerCode) : center.customerCode;

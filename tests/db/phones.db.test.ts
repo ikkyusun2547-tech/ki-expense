@@ -111,7 +111,7 @@ describe("admin จัดการทะเบียนเบอร์โทร�
 });
 
 describe("ค้นเบอร์ในฟอร์มใบเบิก", () => {
-  it("ผู้จัดทำพิมพ์เบอร์แบบมีขีด → เจอเป็นค่าโทรศัพท์; สรุปรายศูนย์ (ค่าอินเทอร์เน็ต) ไม่แสดงเบอร์", async () => {
+  it("ผู้จัดทำพิมพ์เบอร์แบบมีขีด → เจอเป็นค่าโทรศัพท์; สรุปแยกแท็บ ศูนย์ / เบอร์", async () => {
     await db.center.create({
       data: { kind: "PHONE", customerCode: phone(8), provider: "TRUE", name: "ฝ่ายทดสอบ", normalAmount: "374.50", dueDay: 9 },
     });
@@ -121,8 +121,13 @@ describe("ค้นเบอร์ในฟอร์มใบเบิก", () =
       result: { ok: true, center: { kind: "PHONE", customerCode: phone(8), provider: "TRUE", name: "ฝ่ายทดสอบ" } },
     });
     expect(await run(() => findCenterByCode("099-9999999"))).toMatchObject({ result: { ok: false } });
-    const summaries = await getCenterSummaries("2026-10-26");
-    expect(summaries.some((s) => s.center.customerCode === phone(8))).toBe(false);
+    const has = (rows: Awaited<ReturnType<typeof getCenterSummaries>>) => rows.some((s) => s.center.customerCode === phone(8));
+    expect(has(await getCenterSummaries("2026-10-26", "INTERNET"))).toBe(false);
+    // ครบกำหนดทุกวันที่ 9 ยังไม่เคยเบิก → เลยกำหนดของเดือนนี้ (นับในตัวเลขบนเมนูผู้จัดทำด้วย)
+    expect((await getCenterSummaries("2026-10-26", "PHONE")).find((s) => s.center.customerCode === phone(8))).toMatchObject({
+      state: "OVERDUE",
+      center: { kind: "PHONE" },
+    });
   });
 
   it("ไม่ใช่ admin เพิ่มเบอร์ไม่ได้", async () => {

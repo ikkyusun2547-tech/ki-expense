@@ -41,6 +41,11 @@ export const CENTER_STATUS_LABEL: Record<CenterStatus, string> = {
   CLOSED: "ปิด",
 };
 
+export const SERVICE_KIND_LABEL: Record<ServiceKind, string> = {
+  INTERNET: "อินเทอร์เน็ต",
+  PHONE: "โทรศัพท์",
+};
+
 // เบอร์โทรศัพท์ไม่มีสถานะ "ย้าย" (CHECK Center_phone_status) และเรียก CLOSED ว่า "ยกเลิก"
 export const PHONE_STATUS_LABEL: Record<"ACTIVE" | "CLOSED", string> = {
   ACTIVE: "ใช้งาน",

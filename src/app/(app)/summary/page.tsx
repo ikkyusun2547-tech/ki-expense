@@ -6,6 +6,7 @@ import {
   Alert,
   Badge,
   ButtonLink,
+  cx,
   EmptyRow,
   NameCell,
   PageHeader,
@@ -18,6 +19,8 @@ import {
   type BadgeTone,
   type IconType,
 } from "@/components/ui";
+import type { ServiceKind } from "@/generated/prisma/enums";
+import { centerCode } from "@/lib/centers/phone";
 import { DUE_SOON_DAYS, type CenterSummaryState } from "@/lib/rules/centerSummary";
 import { canCreateRequest } from "@/lib/status";
 import { formatThaiDate, todayISO } from "@/lib/thai/date";
@@ -34,6 +37,11 @@ const STATE: Record<CenterSummaryState, { label: string; short: string; tone: Ba
 
 const STATES = Object.keys(STATE) as CenterSummaryState[];
 
+const KIND_TAB: Record<ServiceKind, { label: string; noun: string }> = {
+  INTERNET: { label: "ศูนย์ (ค่าอินเทอร์เน็ต)", noun: "ศูนย์" },
+  PHONE: { label: "เบอร์ (ค่าโทรศัพท์)", noun: "เบอร์" },
+};
+
 export default async function SummaryPage({ searchParams }: PageProps<"/summary">) {
   const user = await requireUser();
   const today = todayISO();
@@ -41,14 +49,27 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
   const params = await searchParams;
   const filter = STATES.find((s) => s === params.state);
 
-  const rows = await getCenterSummaries(today);
+  const all = await getCenterSummaries(today);
   const isCreator = canCreateRequest(user.role);
 
   // ผู้จัดทำ: เพิ่งส่งขออนุมัติจากฟอร์ม (กลับมาทำศูนย์ถัดไป) + ใบที่ยังไม่ส่ง/ถูกตีกลับ
   const sent =
     isCreator && typeof params.sent === "string"
-      ? await db.request.findUnique({ where: { id: params.sent }, select: { id: true, approverName: true, center: { select: { name: true } } } })
+      ? await db.request.findUnique({
+          where: { id: params.sent },
+          select: { id: true, approverName: true, center: { select: { name: true, kind: true } } },
+        })
       : null;
+
+  // แท็บ ศูนย์ / เบอร์โทร (มีแท็บเบอร์เมื่อมีเบอร์ในทะเบียน) — เพิ่งส่งใบค่าโทรศัพท์ → เปิดแท็บเบอร์ให้
+  const kind: ServiceKind = params.kind === "PHONE" || params.kind === "INTERNET" ? params.kind : (sent?.center.kind ?? "INTERNET");
+  const hasPhones = all.some((r) => r.center.kind === "PHONE");
+  const rows = all.filter((r) => r.center.kind === kind);
+  const noun = KIND_TAB[kind].noun;
+  const href = (state?: CenterSummaryState) => {
+    const p = new URLSearchParams({ ...(kind === "PHONE" && { kind }), ...(state && { state }) });
+    return p.size ? `/summary?${p}` : "/summary";
+  };
   const drafts = isCreator ? await db.request.count({ where: { status: "CREATED", deletedAt: null } }) : 0;
   const shown = filter ? rows.filter((r) => r.state === filter) : rows;
   const countOf = (s: CenterSummaryState) => rows.filter((r) => r.state === s).length;
@@ -57,15 +78,15 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
     <>
       <PageHeader
         icon={LayoutDashboard}
-        title="สรุปรายศูนย์"
-        description={`${rows.length} ศูนย์ · ณ ${formatThaiDate(today, "long")}`}
+        title={kind === "PHONE" ? "สรุปรายเบอร์" : "สรุปรายศูนย์"}
+        description={`${rows.length} ${noun} · ณ ${formatThaiDate(today, "long")}`}
       />
 
       {(sent || drafts > 0) && (
         <div className="mb-6 flex flex-col gap-3">
           {sent && (
             <Alert tone="success">
-              ส่งใบเบิก <span className="font-semibold">{sent.center.name}</span> ให้ {sent.approverName} อนุมัติแล้ว — ทำศูนย์ถัดไปได้เลย ·{" "}
+              ส่งใบเบิก <span className="font-semibold">{sent.center.name}</span> ให้ {sent.approverName} อนุมัติแล้ว — ทำ{noun}ถัดไปได้เลย ·{" "}
               <Link href={`/requests/${sent.id}`} className="font-medium underline">
                 ดู/พิมพ์ใบเบิก
               </Link>
@@ -82,16 +103,48 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
         </div>
       )}
 
+      {hasPhones && (
+        <nav className="mb-4 inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-sm">
+          {(Object.keys(KIND_TAB) as ServiceKind[]).map((k) => {
+            const todo = all.filter((r) => r.center.kind === k && (r.state === "OVERDUE" || r.state === "DUE_SOON"));
+            const active = kind === k;
+            return (
+              <Link
+                key={k}
+                href={k === "PHONE" ? "/summary?kind=PHONE" : "/summary"}
+                aria-current={active ? "page" : undefined}
+                className={cx(
+                  "flex items-center gap-1.5 rounded-md px-4 py-1.5",
+                  active ? "bg-emerald-700 font-medium text-white shadow-sm" : "text-slate-600 hover:bg-slate-100",
+                )}
+              >
+                {KIND_TAB[k].label}
+                {todo.length > 0 && (
+                  <span
+                    className={cx(
+                      "rounded-full px-1.5 text-xs",
+                      active ? "bg-white/20" : todo.some((r) => r.state === "OVERDUE") ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800",
+                    )}
+                  >
+                    {todo.length}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
+
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {STATES.map((s) => (
           <StatCard
             key={s}
             label={STATE[s].short}
             value={countOf(s)}
-            sub={s === "DUE_SOON" ? `ภายใน ${DUE_SOON_DAYS} วัน` : "ศูนย์"}
+            sub={s === "DUE_SOON" ? `ภายใน ${DUE_SOON_DAYS} วัน` : noun}
             icon={STATE[s].icon}
             tone={STATE[s].tone}
-            href={filter === s ? "/summary" : `/summary?state=${s}`}
+            href={filter === s ? href() : href(s)}
             active={filter === s}
           />
         ))}
@@ -100,18 +153,18 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
       {filter && (
         <div className="mb-3 flex items-center gap-2 text-sm text-slate-500">
           แสดงเฉพาะ <Badge tone={STATE[filter].tone}>{STATE[filter].label}</Badge>
-          <Link href="/summary" className="font-medium text-emerald-700 hover:underline">
+          <Link href={href()} className="font-medium text-emerald-700 hover:underline">
             แสดงทั้งหมด
           </Link>
         </div>
       )}
 
-      {/* จอเล็ก: การ์ดทีละศูนย์ (ปุ่มสร้าง/ดูใบเบิกเห็นทันที) — จอใหญ่: ตาราง */}
+      {/* จอเล็ก: การ์ดทีละศูนย์/เบอร์ (ปุ่มสร้าง/ดูใบเบิกเห็นทันที) — จอใหญ่: ตาราง */}
       <ul className="flex flex-col gap-3 md:hidden">
         {shown.map((r) => (
           <li key={r.center.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
-              <NameCell name={r.center.name} code={r.center.customerCode} />
+              <NameCell name={r.center.name} code={centerCode(r.center)} />
               <StatusBadge row={r} />
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
@@ -125,7 +178,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
         ))}
         {shown.length === 0 && (
           <li className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
-            {filter ? "ไม่มีศูนย์ในสถานะนี้" : "ยังไม่มีศูนย์ที่ใช้งานอยู่ในทะเบียน"}
+            {filter ? `ไม่มี${noun}ในสถานะนี้` : `ยังไม่มี${noun}ที่ใช้งานอยู่ในทะเบียน`}
           </li>
         )}
       </ul>
@@ -135,7 +188,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
           <table className={tableClass}>
             <thead>
               <tr>
-                <th className={thClass}>ศูนย์</th>
+                <th className={thClass}>{kind === "PHONE" ? "ผู้ใช้บริการ / เบอร์" : "ศูนย์"}</th>
                 <th className={thClass}>ครบกำหนดรอบนี้</th>
                 <th className={thClass}>สถานะ</th>
                 <th className={thClass} />
@@ -145,7 +198,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
               {shown.map((r) => (
                 <tr key={r.center.id} className={rowClass}>
                   <td className={tdClass}>
-                    <NameCell name={r.center.name} code={r.center.customerCode} />
+                    <NameCell name={r.center.name} code={centerCode(r.center)} />
                   </td>
                   <td className={`${tdClass} whitespace-nowrap`}>
                     <div className="flex flex-wrap items-center gap-2">
@@ -164,7 +217,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
               ))}
               {shown.length === 0 && (
                 <EmptyRow colSpan={4} icon={Inbox}>
-                  {filter ? "ไม่มีศูนย์ในสถานะนี้" : "ยังไม่มีศูนย์ที่ใช้งานอยู่ในทะเบียน"}
+                  {filter ? `ไม่มี${noun}ในสถานะนี้` : `ยังไม่มี${noun}ที่ใช้งานอยู่ในทะเบียน`}
                 </EmptyRow>
               )}
             </tbody>

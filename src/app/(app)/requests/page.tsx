@@ -1,5 +1,5 @@
 import { CircleCheck, FilePlus, FileText, Hourglass, Inbox, Plus, Receipt, Send } from "lucide-react";
-import type { RequestStatus } from "@/generated/prisma/enums";
+import type { RequestStatus, ServiceKind } from "@/generated/prisma/enums";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import {
   Badge,
@@ -21,14 +21,15 @@ import {
   type BadgeTone,
   type IconType,
 } from "@/components/ui";
-import { centerCode } from "@/lib/centers/phone";
+import { centerCode, kindTag } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
-import { canCreateRequest, returnedBy, STATUS_LABEL } from "@/lib/status";
+import { canCreateRequest, returnedBy, SERVICE_KIND_LABEL, STATUS_LABEL } from "@/lib/status";
 import { formatThaiDate, toISODate } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
 
 const STATUSES = Object.keys(STATUS_LABEL) as RequestStatus[];
+const KINDS = Object.keys(SERVICE_KIND_LABEL) as ServiceKind[];
 
 const STATUS_CARD: Record<RequestStatus, { icon: IconType; tone: BadgeTone; sub: string }> = {
   CREATED: { icon: FileText, tone: "zinc", sub: "รอส่งขออนุมัติ" },
@@ -43,12 +44,14 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q.trim() : "";
   const status = STATUSES.find((s) => s === params.status);
+  const kind = KINDS.find((k) => k === params.kind);
 
   const [requests, counts] = await Promise.all([
     db.request.findMany({
       where: {
         deletedAt: null,
         ...(status && { status }),
+        ...(kind && { center: { kind } }),
         ...(q && {
           OR: [
             { invoiceNo: { contains: q, mode: "insensitive" } },
@@ -71,11 +74,11 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
       },
       take: 200,
     }),
-    db.request.groupBy({ by: ["status"], where: { deletedAt: null }, _count: true }),
+    db.request.groupBy({ by: ["status"], where: { deletedAt: null, ...(kind && { center: { kind } }) }, _count: true }),
   ]);
   const countOf = (s: RequestStatus) => counts.find((c) => c.status === s)?._count ?? 0;
   const filterHref = (s: RequestStatus) => {
-    const p = new URLSearchParams({ ...(q && { q }), ...(status !== s && { status: s }) });
+    const p = new URLSearchParams({ ...(q && { q }), ...(kind && { kind }), ...(status !== s && { status: s }) });
     return p.size ? `/requests?${p}` : "/requests";
   };
 
@@ -84,7 +87,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
       <PageHeader
         icon={Receipt}
         title="ใบเบิก"
-        description="ใบเบิกทุกศูนย์ (ล่าสุด 200 ใบ)"
+        description="ใบเบิกทุกศูนย์และทุกเบอร์ (ล่าสุด 200 ใบ)"
         actions={
           canCreateRequest(user.role) && (
             <ButtonLink href="/requests/new" icon={Plus}>
@@ -110,7 +113,13 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
       </div>
 
       <FilterBar>
-        <SearchInput defaultValue={q} placeholder="ค้นหาศูนย์ / รหัสลูกค้า / เลขที่ใบแจ้งหนี้" />
+        <SearchInput defaultValue={q} placeholder="ค้นหาศูนย์ / รหัสลูกค้า / เบอร์ / เลขที่ใบแจ้งหนี้" />
+        <FilterSelect
+          name="kind"
+          label="ประเภท"
+          defaultValue={kind}
+          options={[{ value: "", label: "ทุกประเภท" }, ...KINDS.map((k) => ({ value: k, label: `ค่า${SERVICE_KIND_LABEL[k]}` }))]}
+        />
         <FilterSelect
           name="status"
           label="สถานะ"
@@ -121,7 +130,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
           <Button type="submit" variant="secondary" className="flex-1 sm:flex-none">
             ค้นหา
           </Button>
-          {(q || status) && (
+          {(q || status || kind) && (
             <ButtonLink href="/requests" variant="ghost">
               ล้างตัวกรอง
             </ButtonLink>
@@ -133,7 +142,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
         <table className={tableClass}>
           <thead>
             <tr>
-              <th className={thClass}>ศูนย์</th>
+              <th className={thClass}>ศูนย์ / เบอร์</th>
               <th className={thClass}>รอบบริการ</th>
               <th className={thClass}>เลขที่ใบแจ้งหนี้</th>
               <th className={`${thClass} text-right`}>ยอด (บาท)</th>
@@ -146,7 +155,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
             {requests.map((r) => (
               <tr key={r.id} className={rowClass}>
                 <td className={tdClass}>
-                  <NameCell name={r.center.name} code={centerCode(r.center)} href={`/requests/${r.id}`} />
+                  <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
                 </td>
                 <td className={`${tdClass} whitespace-nowrap`}>
                   {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}

@@ -1,4 +1,6 @@
 import { formatAmount, toSatang, type AmountInput } from "@/lib/money";
+import type { ServiceKind } from "@/generated/prisma/enums";
+import { SERVICE_KIND_LABEL } from "@/lib/status";
 import { beYear, formatBEDate, thaiMonthName, type ISODate } from "@/lib/thai/date";
 
 // รายงานการจ่ายรายเดือน (ฝ่ายบัญชี) เป็น CSV ที่เปิดด้วย Excel ได้เลย
@@ -7,8 +9,9 @@ import { beYear, formatBEDate, thaiMonthName, type ISODate } from "@/lib/thai/da
 
 export type PaymentRow = {
   paidDate: ISODate;
-  centerName: string;
-  customerCode: string;
+  kind: ServiceKind;
+  centerName: string; // ชื่อศูนย์ / ผู้ใช้บริการของเบอร์
+  customerCode: string; // รหัสลูกค้า / เบอร์แบบมีขีด
   invoiceNo: string;
   periodStart: ISODate;
   periodEnd: ISODate;
@@ -18,7 +21,19 @@ export type PaymentRow = {
   approverName: string | null;
 };
 
-const HEADER = ["ลำดับ", "วันที่จ่าย", "ศูนย์", "รหัสลูกค้า", "เลขที่ใบแจ้งหนี้", "รอบบริการ", "ครบกำหนดชำระ", "ยอด (บาท)", "เลขอ้างอิงการจ่าย", "ผู้อนุมัติ"];
+const HEADER = [
+  "ลำดับ",
+  "วันที่จ่าย",
+  "ประเภท",
+  "ศูนย์ / ผู้ใช้บริการ",
+  "รหัสลูกค้า / เบอร์",
+  "เลขที่ใบแจ้งหนี้",
+  "รอบบริการ",
+  "ครบกำหนดชำระ",
+  "ยอด (บาท)",
+  "เลขอ้างอิงการจ่าย",
+  "ผู้อนุมัติ",
+];
 
 // ครอบด้วย " เมื่อมี , " หรือขึ้นบรรทัด; ค่าที่ขึ้นต้นด้วย = + - @ ใส่ ' นำหน้า กัน Excel ตีความเป็นสูตร
 function cell(value: string): string {
@@ -34,11 +49,12 @@ export function paymentsCsv(month: string, rows: PaymentRow[]): string {
   const first = `${month}-01`;
 
   const lines = [
-    [`สรุปการจ่ายค่าอินเทอร์เน็ต เดือน${thaiMonthName(first)} ${beYear(first)}`],
+    [`สรุปการจ่ายค่าอินเทอร์เน็ต/โทรศัพท์ เดือน${thaiMonthName(first)} ${beYear(first)}`],
     HEADER,
     ...rows.map((r, i) => [
       String(i + 1),
       formatBEDate(r.paidDate),
+      SERVICE_KIND_LABEL[r.kind],
       r.centerName,
       r.customerCode,
       r.invoiceNo,
@@ -48,7 +64,7 @@ export function paymentsCsv(month: string, rows: PaymentRow[]): string {
       r.paymentRef,
       r.approverName ?? "",
     ]),
-    ["", "", "", "", "", "", `รวม ${rows.length} รายการ`, totalText, "", ""],
+    ["", "", "", "", "", "", "", `รวม ${rows.length} รายการ`, totalText, "", ""],
   ];
   return "﻿" + lines.map((l) => l.map(cell).join(",")).join("\r\n") + "\r\n";
 }

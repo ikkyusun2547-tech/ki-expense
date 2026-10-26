@@ -3,7 +3,7 @@ import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import { Alert, cx, EmptyRow, NameCell, PageHeader, RowLink, rowClass, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
-import { centerCode } from "@/lib/centers/phone";
+import { centerCode, kindTag } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { daysUntil } from "@/lib/rules/centerSummary";
 import { formatThaiDate, formatThaiDateTime, toISODate, todayISO } from "@/lib/thai/date";
@@ -131,7 +131,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                         </td>
                         {/* รอบบริการ + ไฟล์อยู่ใต้ชื่อศูนย์ เพื่อเหลือที่ให้ปุ่มอนุมัติ/ไม่อนุมัติ */}
                         <td className={tdClass}>
-                          <NameCell name={r.center.name} code={centerCode(r.center)} href={`/requests/${r.id}`} />
+                          <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
                           <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
                             <span className="whitespace-nowrap">
                               {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
@@ -203,7 +203,7 @@ function PendingCards({ rows, today, isApprover }: { rows: PendingRow[]; today: 
                     <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
                   </span>
                 )}
-                <NameCell name={r.center.name} code={centerCode(r.center)} href={`/requests/${r.id}`} />
+                <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
               </div>
               <div className="text-right">
                 <div className="text-lg font-bold tabular-nums text-slate-900">{formatAmount(r.amount)}</div>
@@ -289,7 +289,7 @@ async function DoneTable({ where, showApprover }: { where: { approverId?: string
             <tr key={r.id} className={rowClass}>
               <td className={`${tdClass} whitespace-nowrap`}>{r.approvedAt && formatThaiDateTime(r.approvedAt)}</td>
               <td className={tdClass}>
-                <NameCell name={r.center.name} code={centerCode(r.center)} href={`/requests/${r.id}`} />
+                <NameCell name={r.center.name} code={centerCode(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
               </td>
               <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(r.amount)}</td>
               <td className={tdClass}>{r.requesterName ?? r.createdBy.name}</td>

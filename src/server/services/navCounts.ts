@@ -20,7 +20,7 @@ export async function getNavCounts(user: CurrentUser, today: ISODate): Promise<N
 
   switch (user.role) {
     case "CREATOR": {
-      // ศูนย์ที่ต้องเบิก (เลยกำหนด/ใกล้ครบ) + ใบที่ยังไม่ส่งขออนุมัติ (รวมใบที่ถูกตีกลับ)
+      // ศูนย์/เบอร์ที่ต้องเบิก (เลยกำหนด/ใกล้ครบ) + ใบที่ยังไม่ส่งขออนุมัติ (รวมใบที่ถูกตีกลับ)
       const summaries = await getCenterSummaries(today);
       const overdue = summaries.filter((s) => s.state === "OVERDUE").length;
       const dueSoon = summaries.filter((s) => s.state === "DUE_SOON").length;
