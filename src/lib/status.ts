@@ -8,6 +8,7 @@ import type { CenterStatus, LogAction, RequestStatus, Role, ServiceKind } from "
 //            └───────REVERT─────────┴────────────────────┘ (admin)
 //
 // APPROVE/REJECT ต้องเป็นผู้อนุมัติที่เลือกไว้ในใบนั้นเท่านั้น (ตรวจใน service ด้วย isAssignedApprover)
+// EDIT/DELETE/SUBMIT เฉพาะผู้จัดทำที่สร้างใบ (OWNER_ACTIONS) — admin โอนใบให้คนอื่นได้ (TRANSFER) เมื่อเจ้าของไม่อยู่
 
 // SEND = การกระทำเดิมก่อนมีการอนุมัติในระบบ — เหลือไว้แสดง log เก่าเท่านั้น
 export type RequestAction = Exclude<LogAction, "CREATE" | "SEND">;
@@ -26,7 +27,11 @@ export const ACTION_RULES: Record<RequestAction, ActionRule> = {
   REJECT: { roles: ["APPROVER"], from: ["PENDING"], to: "CREATED" },
   PAY: { roles: ["ACCOUNTING"], from: ["APPROVED"], to: "PAID" },
   REVERT: { roles: ["ADMIN"], from: ["PENDING", "APPROVED"], to: "CREATED" },
+  TRANSFER: { roles: ["ADMIN"], from: ["CREATED", "PENDING", "APPROVED"] }, // จ่ายแล้ว = ล็อก ไม่ต้องมีเจ้าของดูแลต่อ
 };
+
+// ทำได้เฉพาะผู้จัดทำที่สร้างใบ (ผู้ใช้เลือก 2026-10-27 — จะมีผู้จัดทำหลายคน)
+export const OWNER_ACTIONS: readonly RequestAction[] = ["EDIT", "DELETE", "SUBMIT"];
 
 export const STATUS_LABEL: Record<RequestStatus, string> = {
   CREATED: "สร้างแล้ว",
@@ -73,6 +78,7 @@ export const ACTION_LABEL: Record<LogAction, string> = {
   REJECT: "ไม่อนุมัติ",
   PAY: "บันทึกการจ่าย",
   REVERT: "ย้อนสถานะ",
+  TRANSFER: "โอนใบเบิก",
 };
 
 export function canCreateRequest(role: Role): boolean {
@@ -115,6 +121,19 @@ export function checkTransition(role: Role, action: RequestAction, status: Reque
 
 export function canPerform(role: Role, action: RequestAction, status: RequestStatus): boolean {
   return checkTransition(role, action, status).ok;
+}
+
+export const NOT_OWNER_REASON = "ใบเบิกนี้เป็นของผู้จัดทำคนอื่น แก้ไข/ลบ/ส่งได้เฉพาะผู้สร้างใบ (ถ้าผู้สร้างไม่อยู่ ให้ผู้ดูแลระบบโอนใบให้)";
+
+// checkTransition + เจ้าของใบ — ใช้กับใบเบิกจริง (service บังคับ, หน้าจอซ่อนปุ่ม)
+export function checkRequestAction(
+  actor: { id: string; role: Role },
+  action: RequestAction,
+  request: { status: RequestStatus; createdById: string },
+): TransitionCheck {
+  const result = checkTransition(actor.role, action, request.status);
+  if (result.ok && OWNER_ACTIONS.includes(action) && request.createdById !== actor.id) return { ok: false, reason: NOT_OWNER_REASON };
+  return result;
 }
 
 // ใบที่ "สร้างแล้ว" เพราะถูกตีกลับ (ผู้อนุมัติไม่อนุมัติ / admin ย้อนสถานะ) → คืน log นั้นไว้แสดงเหตุผลให้ผู้จัดทำเห็น

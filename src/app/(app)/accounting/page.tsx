@@ -1,7 +1,9 @@
-import { Banknote, Calculator, CircleCheck, Clock, Download, Inbox, Paperclip, TriangleAlert, Wallet } from "lucide-react";
+import { Banknote, Calculator, CircleCheck, Clock, Download, Eye, Inbox, Paperclip, TriangleAlert, Wallet } from "lucide-react";
 import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
 import { PhoneChargesNote } from "@/components/PhoneCharges";
+import { ClickableRow } from "@/components/ClickableRow";
+import { AmountCell, COLUMN, InvoiceCell, PeriodDueCell, ServiceCell, TwoLine } from "@/components/RequestCells";
 import {
   Alert,
   Button,
@@ -10,12 +12,14 @@ import {
   FilterSelect,
   NameCell,
   PageHeader,
-  rowClass,
+  RowLink,
   StatCard,
   TableCard,
   tableClass,
   tdClass,
+  tdClassDense,
   thClass,
+  thClassDense,
 } from "@/components/ui";
 import { centerLabel, kindTag } from "@/lib/centers/phone";
 import { formatAmount, toSatang } from "@/lib/money";
@@ -145,8 +149,11 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
                 ครบกำหนด {formatThaiDate(due)} <DueBadge daysLeft={daysUntil(today, due)} />
               </div>
-              <div className="mt-1 text-xs text-slate-500">
-                ใบแจ้งหนี้ <span className="tabular-nums">{r.invoiceNo}</span> · <FileLink row={r} />
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-500">
+                  ใบแจ้งหนี้ <span className="tabular-nums">{r.invoiceNo}</span> · <FileLink row={r} />
+                </span>
+                <RowLink href={`/requests/${r.id}`} icon={Eye}>ดู</RowLink>
               </div>
               {canPay && (
                 <div className="mt-3 border-t border-slate-100 pt-3">
@@ -163,58 +170,49 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
         )}
       </ul>
 
-      {/* จอใหญ่: ตาราง — รอบบริการ/ไฟล์ อยู่ใต้ศูนย์/เลขที่ เพื่อไม่ให้คอลัมน์เบียดจนหักบรรทัด */}
+      {/* จอใหญ่: ตาราง — คอลัมน์ละเรื่องตามมาตรฐาน RequestCells */}
       <div className="hidden md:block">
         <TableCard>
           <table className={tableClass}>
             <thead>
               <tr>
-                {canPay && <th className={`${thClass} w-10`} />}
-                <th className={thClass}>ครบกำหนด</th>
-                <th className={thClass}>ศูนย์ / ใบแจ้งหนี้</th>
-                <th className={`${thClass} text-right`}>ยอด (บาท)</th>
-                <th className={thClass} />
+                {canPay && <th className={`${thClassDense} w-10`} />}
+                <th className={thClassDense}>{COLUMN.service}</th>
+                <th className={thClassDense}>{COLUMN.invoice}</th>
+                <th className={thClassDense}>{COLUMN.periodDue}</th>
+                <th className={`${thClassDense} text-right`}>{COLUMN.amount}</th>
+                <th className={thClassDense}>{canPay ? "บันทึกการจ่าย" : ""}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
-                const due = toISODate(r.dueDate);
                 return (
-                  <tr key={r.id} className={cx(rowClass, "align-top")}>
+                  <ClickableRow key={r.id} href={`/requests/${r.id}`}>
                     {canPay && (
-                      <td className={tdClass}>
+                      <td className={tdClassDense}>
                         <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
                       </td>
                     )}
-                    <td className={`${tdClass} whitespace-nowrap`}>
-                      <div className="flex flex-col items-start gap-1">
-                        <span>{formatThaiDate(due)}</span>
-                        <DueBadge daysLeft={daysUntil(today, due)} />
-                      </div>
+                    <td className={tdClassDense}>
+                      <ServiceCell center={r.center} href={`/requests/${r.id}`} />
                     </td>
-                    <td className={tdClass}>
-                      <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
-                      {/* รอบบริการ + เลขที่ใบแจ้งหนี้ + ไฟล์ อยู่ใต้ชื่อศูนย์ เพื่อเหลือที่ให้ช่องบันทึกจ่ายในแถว */}
-                      <div className="mt-1 whitespace-nowrap text-xs text-slate-500">
-                        {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-                        <span className="tabular-nums">{r.invoiceNo}</span>
-                        <FileLink row={r} />
-                      </div>
+                    <td className={tdClassDense}>
+                      <InvoiceCell id={r.id} invoiceNo={r.invoiceNo} hasFile={!!r.invoiceFileKey} />
                     </td>
-                    <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>
-                      {formatAmount(r.amount)}
-                      <PhoneChargesNote request={r} />
+                    <td className={tdClassDense}>
+                      <PeriodDueCell periodStart={r.periodStart} periodEnd={r.periodEnd} dueDate={r.dueDate} today={today} />
                     </td>
-                    <td className={`${tdClass} min-w-[25rem]`}>
+                    <td className={tdClassDense}>
+                      <AmountCell request={r} />
+                    </td>
+                    <td className={tdClassDense}>
                       {canPay ? <PayAction row={r} today={today} /> : <span className="text-slate-300">–</span>}
                     </td>
-                  </tr>
+                  </ClickableRow>
                 );
               })}
               {rows.length === 0 && (
-                <EmptyRow colSpan={5} icon={Inbox}>
+                <EmptyRow colSpan={6} icon={Inbox}>
                   ไม่มีใบเบิกที่รอจ่าย
                 </EmptyRow>
               )}
@@ -240,7 +238,7 @@ function FileLink({ row }: { row: PendingRow }) {
   );
 }
 
-// บันทึกการจ่ายทีละใบในแถวเลย: วันที่จ่าย (ค่าเริ่มต้นวันนี้) + เลขอ้างอิง + ปุ่มบันทึก
+// บันทึกการจ่ายทีละใบในแถวเลย: วันที่จ่าย (ค่าเริ่มต้นวันนี้) + ปุ่มบันทึก
 function PayAction({ row, today, suffix }: { row: PendingRow; today: string; suffix?: string }) {
   return <PayForm id={row.id} today={today} returnTo="list" suffix={suffix} compact />;
 }
@@ -281,29 +279,32 @@ async function PaidTable({ today }: { today: string }) {
         <table className={tableClass}>
           <thead>
             <tr>
-              <th className={thClass}>วันที่จ่าย</th>
-              <th className={thClass}>ศูนย์</th>
-              <th className={thClass}>รอบบริการ</th>
-              <th className={`${thClass} text-right`}>ยอด (บาท)</th>
-              <th className={thClass}>เลขอ้างอิง</th>
+              <th className={thClass}>{COLUMN.service}</th>
+              <th className={thClass}>{COLUMN.invoice}</th>
+              <th className={thClass}>{COLUMN.periodDue}</th>
+              <th className={`${thClass} text-right`}>{COLUMN.amount}</th>
+              <th className={thClass}>จ่ายแล้ว</th>
             </tr>
           </thead>
           <tbody>
             {requests.map((r) => (
-              <tr key={r.id} className={rowClass}>
-                <td className={`${tdClass} whitespace-nowrap`}>{r.paidDate && formatThaiDate(toISODate(r.paidDate))}</td>
+              <ClickableRow key={r.id} href={`/requests/${r.id}`}>
                 <td className={tdClass}>
-                  <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                  <ServiceCell center={r.center} href={`/requests/${r.id}`} />
                 </td>
-                <td className={`${tdClass} whitespace-nowrap`}>
-                  {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
+                <td className={tdClass}>
+                  <InvoiceCell id={r.id} invoiceNo={r.invoiceNo} hasFile={!!r.invoiceFileKey} />
                 </td>
-                <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>
-                  {formatAmount(r.amount)}
-                  <PhoneChargesNote request={r} />
+                <td className={tdClass}>
+                  <PeriodDueCell periodStart={r.periodStart} periodEnd={r.periodEnd} dueDate={r.dueDate} />
                 </td>
-                <td className={`${tdClass} tabular-nums`}>{r.paymentRef}</td>
-              </tr>
+                <td className={tdClass}>
+                  <AmountCell request={r} />
+                </td>
+                <td className={tdClass}>
+                  <TwoLine main={r.paidDate && formatThaiDate(toISODate(r.paidDate))} sub={r.paymentRef && `อ้างอิง ${r.paymentRef}`} />
+                </td>
+              </ClickableRow>
             ))}
             {requests.length === 0 && (
               <EmptyRow colSpan={5} icon={Inbox}>

@@ -61,6 +61,17 @@ describe("summarizeCenter (วันนี้ 22 ต.ค. 2569)", () => {
     expect(result).toMatchObject({ state: "REQUESTED", dueDate: "2026-10-02" });
   });
 
+  it("เดือนนี้ไม่มีใบ แต่มีใบของรอบใหม่กว่าแล้ว → เบิกแล้ว แสดงวันครบกำหนดของใบนั้น", () => {
+    const newer = req("2026-11-09", "PAID");
+    expect(summarizeCenter(9, [newer], "2026-10-27")).toEqual({ state: "REQUESTED", dueDate: "2026-11-09", daysLeft: 13, request: newer });
+  });
+
+  it("มีหลายใบที่ใหม่กว่า → ใช้ใบที่ใกล้ที่สุด", () => {
+    const dec = req("2026-12-09");
+    const nov = req("2026-11-09");
+    expect(summarizeCenter(9, [dec, nov], "2026-10-27")).toMatchObject({ state: "REQUESTED", request: nov });
+  });
+
   it("ข้ามปี: ธ.ค. เบิกแล้ว ม.ค. ใกล้ครบ", () => {
     expect(summarizeCenter(3, [req("2026-12-03")], "2026-12-29")).toMatchObject({ state: "DUE_SOON", dueDate: "2027-01-03", daysLeft: 5 });
   });

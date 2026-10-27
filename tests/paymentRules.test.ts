@@ -12,10 +12,11 @@ describe("checkPayment", () => {
     });
   });
 
-  it("ต้องกรอกทั้งคู่", () => {
+  it("วันที่จ่ายบังคับ / เลขอ้างอิงไม่บังคับ (ว่าง = null)", () => {
+    expect(checkPayment({ paidDate: today, paymentRef: " " }, today)).toEqual({ ok: true, paidDate: today, paymentRef: null }); // เลขอ้างอิงไม่บังคับ
     expect(checkPayment({ paidDate: "", paymentRef: " " }, today)).toEqual({
       ok: false,
-      errors: { paidDate: "กรอกวันที่จ่าย", paymentRef: "กรอกเลขอ้างอิงการจ่าย" },
+      errors: { paidDate: "กรอกวันที่จ่าย" },
     });
   });
 

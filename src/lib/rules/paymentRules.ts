@@ -1,13 +1,13 @@
 import { isISODate, type ISODate } from "@/lib/thai/date";
 
-// ตรวจข้อมูลการจ่ายที่ฝ่ายบัญชีบันทึก (วันที่จ่าย + เลขอ้างอิง บังคับทั้งคู่)
+// ตรวจข้อมูลการจ่ายที่ฝ่ายบัญชีบันทึก: วันที่จ่ายบังคับ, เลขอ้างอิงไม่บังคับ (ผู้ใช้เปลี่ยน 2026-10-27 — "อาจยังไม่ต้องใช้")
 
 export const MAX_PAYMENT_REF = 100;
 
 export type PaymentInput = { paidDate: string; paymentRef: string };
 
 export type PaymentCheck =
-  | { ok: true; paidDate: ISODate; paymentRef: string }
+  | { ok: true; paidDate: ISODate; paymentRef: string | null }
   | { ok: false; errors: { paidDate?: string; paymentRef?: string } };
 
 export function checkPayment(input: PaymentInput, today: ISODate): PaymentCheck {
@@ -19,9 +19,8 @@ export function checkPayment(input: PaymentInput, today: ISODate): PaymentCheck 
   else if (!isISODate(paidDate)) errors.paidDate = "วันที่จ่ายไม่ถูกต้อง";
   else if (paidDate > today) errors.paidDate = "วันที่จ่ายต้องไม่เกินวันนี้";
 
-  if (!paymentRef) errors.paymentRef = "กรอกเลขอ้างอิงการจ่าย";
-  else if (paymentRef.length > MAX_PAYMENT_REF) errors.paymentRef = `เลขอ้างอิงยาวเกิน ${MAX_PAYMENT_REF} ตัวอักษร`;
+  if (paymentRef.length > MAX_PAYMENT_REF) errors.paymentRef = `เลขอ้างอิงยาวเกิน ${MAX_PAYMENT_REF} ตัวอักษร`;
 
   if (errors.paidDate || errors.paymentRef) return { ok: false, errors };
-  return { ok: true, paidDate, paymentRef };
+  return { ok: true, paidDate, paymentRef: paymentRef || null };
 }

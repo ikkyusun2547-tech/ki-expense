@@ -18,10 +18,7 @@ export default function LoginPage() {
         <div className="absolute -right-24 -top-24 size-96 rounded-full bg-white/5" aria-hidden />
         <div className="absolute -bottom-32 -left-16 size-80 rounded-full bg-white/5" aria-hidden />
         <div className="relative flex items-center gap-3">
-          {/* โลโก้มีพื้นขาวในตัว — วางบนแผ่นขาวให้กลืนกับพื้นเขียว */}
-          <span className="rounded-xl bg-white px-3 py-2 shadow-sm">
-            <Image src="/logo-ki.png" alt="KI" width={255} height={128} className="h-9 w-auto" priority />
-          </span>
+          <Image src="/logo-ki-mark.png" alt="KI" width={258} height={128} className="h-11 w-auto" priority />
           <div className="font-semibold leading-tight">บริษัท น้ำตาลสุรินทร์ จำกัด</div>
         </div>
         <div className="relative">
@@ -45,7 +42,7 @@ export default function LoginPage() {
       <section className="flex items-center justify-center bg-slate-50 px-4 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <Image src="/logo-ki.png" alt="KI" width={255} height={128} className="mb-3 h-10 w-auto" priority />
+            <Image src="/logo-ki-mark.png" alt="KI" width={258} height={128} className="mb-3 h-10 w-auto" priority />
             <div className="text-xl font-bold text-slate-900">ระบบเบิกค่าบริการ</div>
             <div className="text-sm text-slate-500">อินเทอร์เน็ต · โทรศัพท์</div>
             <div className="text-sm text-slate-500">บริษัท น้ำตาลสุรินทร์ จำกัด</div>

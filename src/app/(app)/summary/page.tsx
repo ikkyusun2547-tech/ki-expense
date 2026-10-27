@@ -1,4 +1,6 @@
+import { ClickableRow } from "@/components/ClickableRow";
 import { CalendarClock, CircleCheck, Clock, Eye, Inbox, LayoutDashboard, Plus, TriangleAlert } from "lucide-react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
 import { RequestStatusBadge } from "@/components/StatusBadge";
@@ -66,7 +68,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
   const rows = all.filter((r) => r.center.kind === kind);
   const noun = KIND_TAB[kind].noun;
   const href = (state?: CenterSummaryState) => `${kindHref("/summary", kind)}${state ? `&state=${state}` : ""}`;
-  const drafts = isCreator ? await db.request.count({ where: { status: "CREATED", deletedAt: null, center: { kind } } }) : 0;
+  const drafts = isCreator ? await db.request.count({ where: { status: "CREATED", deletedAt: null, createdById: user.id, center: { kind } } }) : 0;
   const shown = filter ? rows.filter((r) => r.state === filter) : rows;
   const countOf = (s: CenterSummaryState) => rows.filter((r) => r.state === s).length;
 
@@ -90,7 +92,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
           )}
           {drafts > 0 && (
             <Alert tone="warning">
-              มีใบเบิก{KIND_TAB[kind].label}ที่ยังไม่ส่งขออนุมัติ <span className="font-semibold">{drafts} ใบ</span> (รวมใบที่ผู้อนุมัติส่งกลับให้แก้) ·{" "}
+              ใบเบิก{KIND_TAB[kind].label}ของคุณที่ยังไม่ส่งขออนุมัติ <span className="font-semibold">{drafts} ใบ</span> (รวมใบที่ผู้อนุมัติส่งกลับให้แก้) ·{" "}
               <Link href={`${kindHref("/requests", kind)}&status=CREATED`} className="font-medium underline">
                 ดูรายการ
               </Link>
@@ -160,7 +162,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
             </thead>
             <tbody>
               {shown.map((r) => (
-                <tr key={r.center.id} className={rowClass}>
+                <SummaryRow key={r.center.id} href={rowActionHref(r, isCreator)}>
                   <td className={tdClass}>
                     <NameCell {...centerLabel(r.center)} />
                   </td>
@@ -169,7 +171,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
                       <span>{formatThaiDate(r.dueDate)}</span>
                       {r.state !== "REQUESTED" && <DueBadge daysLeft={r.daysLeft} />}
                     </div>
-                    <div className="text-xs text-slate-400">ครบกำหนดทุกวันที่ {r.center.dueDay}</div>
+                    <div className="mt-1.5 text-xs text-slate-400">ครบกำหนดทุกวันที่ {r.center.dueDay}</div>
                   </td>
                   <td className={tdClass}>
                     <StatusBadge row={r} />
@@ -177,7 +179,7 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
                   <td className={`${tdClass} text-right`}>
                     <RowAction row={r} isCreator={isCreator} />
                   </td>
-                </tr>
+                </SummaryRow>
               ))}
               {shown.length === 0 && (
                 <EmptyRow colSpan={4} icon={Inbox}>
@@ -199,19 +201,30 @@ function StatusBadge({ row }: { row: Row }) {
   return row.request ? <RequestStatusBadge status={row.request.status} /> : <Badge tone={STATE[row.state].tone}>{STATE[row.state].label}</Badge>;
 }
 
-// เบิกแล้ว → ดูใบเบิก · ยังไม่เบิก → สร้างใบเบิก (เฉพาะผู้จัดทำ)
+// เบิกแล้ว → ดูใบเบิก · ยังไม่เบิก → สร้างใบเบิก (เฉพาะผู้จัดทำ) · นอกนั้นไม่มีปุ่ม
+function rowActionHref(row: Row, isCreator: boolean): string | null {
+  if (row.request) return `/requests/${row.request.id}`;
+  return isCreator ? `/requests/new?code=${encodeURIComponent(row.center.customerCode)}` : null;
+}
+
+// กดทั้งแถวได้เมื่อแถวมีปุ่ม (ไปที่เดียวกับปุ่ม)
+function SummaryRow({ href, children }: { href: string | null; children: ReactNode }) {
+  return href ? <ClickableRow href={href}>{children}</ClickableRow> : <tr className={rowClass}>{children}</tr>;
+}
+
 function RowAction({ row, isCreator, fullWidth }: { row: Row; isCreator: boolean; fullWidth?: boolean }) {
   const width = fullWidth ? "w-full" : "w-32";
+  const href = rowActionHref(row, isCreator);
+  if (!href) return null;
   if (row.request) {
     return (
-      <ButtonLink href={`/requests/${row.request.id}`} variant="secondary" size="sm" icon={Eye} className={width}>
+      <ButtonLink href={href} variant="secondary" size="sm" icon={Eye} className={width}>
         ดูใบเบิก
       </ButtonLink>
     );
   }
-  if (!isCreator) return null;
   return (
-    <ButtonLink href={`/requests/new?code=${encodeURIComponent(row.center.customerCode)}`} size="sm" icon={Plus} className={width}>
+    <ButtonLink href={href} size="sm" icon={Plus} className={width}>
       สร้างใบเบิก
     </ButtonLink>
   );

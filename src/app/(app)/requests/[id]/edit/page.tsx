@@ -1,7 +1,7 @@
 import { Pencil } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { Card, PageHeader } from "@/components/ui";
-import { canPerform } from "@/lib/status";
+import { checkRequestAction } from "@/lib/status";
 import { toISODate } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
@@ -17,7 +17,7 @@ export default async function EditRequestPage({ params }: PageProps<"/requests/[
     include: { center: true, createdBy: { select: { id: true, name: true, title: true } } },
   });
   if (!request || request.deletedAt) notFound();
-  if (!canPerform(user.role, "EDIT", request.status)) redirect(`/requests/${id}`);
+  if (!checkRequestAction(user, "EDIT", request).ok) redirect(`/requests/${id}`); // เฉพาะเจ้าของใบ + สถานะสร้างแล้ว
 
   const { center } = request;
   const signers = await signerFormProps(request.createdBy, request);

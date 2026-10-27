@@ -7,7 +7,7 @@ import { todayISO } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { payRequest } from "@/server/services/requests";
 
-// ฝ่ายบัญชีบันทึกวันที่จ่าย + เลขอ้างอิง → สถานะ "จ่ายแล้ว"
+// ฝ่ายบัญชีบันทึกวันที่จ่าย (+ เลขอ้างอิง ถ้ามี — ไม่บังคับ) → สถานะ "จ่ายแล้ว"
 export async function recordPayment(_prev: FormState, formData: FormData): Promise<FormState> {
   const actor = await requireRole("ACCOUNTING");
 
@@ -29,8 +29,8 @@ export async function recordPayment(_prev: FormState, formData: FormData): Promi
   redirect(String(formData.get("returnTo") ?? "") === "detail" ? `/requests/${formData.get("id")}` : "/accounting?paid=1");
 }
 
-// บันทึกจ่ายทีละหลายใบด้วยวันที่จ่าย + เลขอ้างอิงเดียวกัน (เช่น โอนรวมครั้งเดียว)
-// ตรวจวันที่/เลขอ้างอิงครั้งเดียวก่อน แล้วบันทึกทีละใบ (ใบที่สถานะเปลี่ยนไปแล้วข้ามไป แล้วแจ้งจำนวน)
+// บันทึกจ่ายทีละหลายใบด้วยวันที่จ่ายเดียวกัน (เช่น โอนรวมครั้งเดียว) — หน้าจอไม่มีช่องเลขอ้างอิงแล้ว
+// ตรวจวันที่ครั้งเดียวก่อน แล้วบันทึกทีละใบ (ใบที่สถานะเปลี่ยนไปแล้วข้ามไป แล้วแจ้งจำนวน)
 export async function payMany(_prev: FormState, formData: FormData): Promise<FormState> {
   const actor = await requireRole("ACCOUNTING");
 

@@ -1,11 +1,12 @@
 import "server-only";
+import type { Prisma } from "@/generated/prisma/client";
 import type { Role, ServiceKind } from "@/generated/prisma/enums";
 import { toAmountString } from "@/lib/money";
 import { fillMemoTexts, type MemoTexts } from "@/lib/pdf/memoData";
 import { checkPayment, type PaymentInput } from "@/lib/rules/paymentRules";
 import { phoneCharges } from "@/lib/rules/phoneCharges";
 import { checkRequest, needsConfirm, type Issue, type RequestDraft } from "@/lib/rules/requestRules";
-import { checkSignerChange, checkTransition, isAssignedApprover, type RequestAction } from "@/lib/status";
+import { checkRequestAction, checkSignerChange, checkTransition, isAssignedApprover, NOT_OWNER_REASON, type RequestAction } from "@/lib/status";
 import { formatThaiDate, fromISODate, toISODate, type ISODate } from "@/lib/thai/date";
 import type { CurrentUser } from "@/server/auth";
 import { db } from "@/server/db";
@@ -174,7 +175,7 @@ export async function updateRequest(args: {
   const current = await db.request.findUnique({ where: { id: args.requestId } });
   if (!current || current.deletedAt) return { ok: false, blocks: [], warnings: [], error: "ไม่พบใบเบิกนี้" };
 
-  const allowed = checkTransition(args.actor.role, "EDIT", current.status);
+  const allowed = checkRequestAction(args.actor, "EDIT", current);
   if (!allowed.ok) return { ok: false, blocks: [], warnings: [], error: allowed.reason };
 
   // เลือกคนเดิม (แม้ถูกปิดบัญชีไปแล้ว) = ไม่เปลี่ยน
@@ -258,7 +259,7 @@ export async function transitionRequest(args: {
   const current = await db.request.findUnique({ where: { id: args.requestId }, include: { approver: true } });
   if (!current || current.deletedAt) return { ok: false, error: "ไม่พบใบเบิกนี้" };
 
-  const allowed = checkTransition(args.actor.role, args.action, current.status);
+  const allowed = checkRequestAction(args.actor, args.action, current);
   if (!allowed.ok) return { ok: false, error: allowed.reason };
 
   if ((args.action === "APPROVE" || args.action === "REJECT") && !isAssignedApprover(args.actor.id, current)) {
@@ -338,7 +339,7 @@ export async function payRequest(args: {
           fromStatus: "APPROVED",
           toStatus: "PAID",
           actorId: args.actor.id,
-          note: `จ่ายวันที่ ${formatThaiDate(payment.paidDate)} เลขอ้างอิง ${payment.paymentRef}`,
+          note: `จ่ายวันที่ ${formatThaiDate(payment.paidDate)}${payment.paymentRef ? ` เลขอ้างอิง ${payment.paymentRef}` : ""}`,
         },
       });
     });
@@ -369,6 +370,7 @@ export async function setRequestSigners(args: {
 
   const allowed = checkSignerChange(args.actor.role, current.status);
   if (!allowed.ok) return { ok: false, error: allowed.reason };
+  if (args.actor.role === "CREATOR" && current.createdById !== args.actor.id) return { ok: false, error: NOT_OWNER_REASON };
 
   // เลือกคนเดิมซ้ำ = คงสำเนาเดิม (แม้บัญชีนั้นถูกปิดไปแล้ว); เลือกคนใหม่ต้องเป็นบัญชีที่ใช้งานอยู่และบทบาทตรง
   const pick = async (choice: string, role: Role, kept: SignerColumns): Promise<SignerColumns | null> => {
@@ -426,6 +428,67 @@ export async function setRequestSigners(args: {
     throw error;
   }
   return { ok: true };
+}
+
+// admin โอนใบเบิกให้ผู้จัดทำคนอื่น (เจ้าของเดิมลา/ลาออก) — เจ้าของใหม่แก้/ลบ/ส่งได้แทน
+// ผู้ขออนุมัติที่ยังเป็นค่าเริ่มต้น (= ผู้จัดทำ) ถูกบันทึกเป็นเจ้าของเดิม เพื่อให้ชื่อในใบเบิกที่พิมพ์ไปแล้วไม่เปลี่ยนตาม
+export async function transferRequest(args: { requestId: string; toUserId: string; actor: CurrentUser }): Promise<TransitionOutcome> {
+  const current = await db.request.findUnique({ where: { id: args.requestId }, include: { createdBy: true } });
+  if (!current || current.deletedAt) return { ok: false, error: "ไม่พบใบเบิกนี้" };
+
+  const allowed = checkTransition(args.actor.role, "TRANSFER", current.status);
+  if (!allowed.ok) return { ok: false, error: allowed.reason };
+  if (current.createdById === args.toUserId) return { ok: false, error: "ใบเบิกนี้เป็นของผู้จัดทำคนนี้อยู่แล้ว" };
+
+  const target = await db.user.findUnique({ where: { id: args.toUserId } });
+  if (!target || !target.active || target.role !== "CREATOR") return { ok: false, error: "เลือกผู้จัดทำที่ใช้งานอยู่" };
+
+  const from = current.createdBy;
+  try {
+    await db.$transaction(async (tx) => {
+      const updated = await tx.request.updateMany({
+        where: { id: current.id, status: current.status, createdById: from.id, deletedAt: null },
+        data: {
+          createdById: target.id,
+          ...(current.requesterId === null && requesterData({ id: from.id, name: from.name, title: from.title ?? "" })),
+        },
+      });
+      if (updated.count === 0) throw new StaleRequestError();
+      await tx.approvalLog.create({
+        data: {
+          requestId: current.id,
+          action: "TRANSFER",
+          fromStatus: current.status,
+          toStatus: current.status,
+          actorId: args.actor.id,
+          note: `จาก ${from.name} ให้ ${target.name}`,
+        },
+      });
+    });
+  } catch (error) {
+    if (error instanceof StaleRequestError) return { ok: false, error: STALE_MESSAGE };
+    throw error;
+  }
+  return { ok: true };
+}
+
+// ใบที่ยังไม่จ่ายของผู้จัดทำคนหนึ่ง (โอนทั้งหมดได้จากหน้าแก้ไขผู้ใช้)
+export const openRequestsWhere = (userId: string): Prisma.RequestWhereInput => ({
+  createdById: userId,
+  deletedAt: null,
+  status: { in: ["CREATED", "PENDING", "APPROVED"] },
+});
+
+export async function transferOpenRequests(args: { fromUserId: string; toUserId: string; actor: CurrentUser }) {
+  const requests = await db.request.findMany({ where: openRequestsWhere(args.fromUserId), select: { id: true } });
+  let ok = 0;
+  let error: string | undefined;
+  for (const r of requests) {
+    const outcome = await transferRequest({ requestId: r.id, toUserId: args.toUserId, actor: args.actor });
+    if (outcome.ok) ok++;
+    else error ??= outcome.error;
+  }
+  return { ok, failed: requests.length - ok, error };
 }
 
 function describeSigner(s: SignerColumns, fallback: string): string {

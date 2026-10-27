@@ -42,16 +42,24 @@ describe("ฝ่ายบัญชีบันทึกการจ่าย", (
     expect(await pay(id, "2026-10-20", "PV-002", "detail")).toEqual({ redirect: `/requests/${id}` });
   });
 
-  it("ต้องกรอกวันที่และเลขอ้างอิง วันที่ห้ามเกินวันนี้ — ไม่ผ่านแล้วไม่มีอะไรเปลี่ยน", async () => {
+  it("ต้องกรอกวันที่ (เลขอ้างอิงไม่บังคับ) วันที่ห้ามเกินวันนี้ — ไม่ผ่านแล้วไม่มีอะไรเปลี่ยน", async () => {
     const c = await center();
     const id = await approvedRequest(c.id);
     await loginAs("ACCOUNTING");
 
-    expect(await pay(id, "", "")).toMatchObject({
-      result: { fieldErrors: { paidDate: ["กรอกวันที่จ่าย"], paymentRef: ["กรอกเลขอ้างอิงการจ่าย"] } },
-    });
+    expect(await pay(id, "", "")).toMatchObject({ result: { fieldErrors: { paidDate: ["กรอกวันที่จ่าย"] } } });
     expect(await pay(id, "2999-01-01", "PV")).toMatchObject({ result: { fieldErrors: { paidDate: ["วันที่จ่ายต้องไม่เกินวันนี้"] } } });
     expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("APPROVED");
+  });
+
+  it("ไม่กรอกเลขอ้างอิงก็บันทึกจ่ายได้ (เก็บเป็น null, log ไม่ต่อท้ายเลขอ้างอิง)", async () => {
+    const c = await center();
+    const id = await approvedRequest(c.id);
+    await loginAs("ACCOUNTING");
+    expect(await pay(id, "2026-10-20", " ")).toEqual({ redirect: "/accounting?paid=1" });
+    expect(await db.request.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "PAID", paymentRef: null });
+    const log = await db.approvalLog.findFirstOrThrow({ where: { requestId: id, action: "PAY" } });
+    expect(log.note).toBe("จ่ายวันที่ 20 ต.ค. 2569");
   });
 
   it("ใบที่ยังไม่อนุมัติ จ่ายไม่ได้", async () => {
@@ -146,11 +154,11 @@ describe("บันทึกจ่ายทีละหลายใบ", () => {
     expect((await db.request.findUniqueOrThrow({ where: { id: c } })).paymentRef).toBe("PV-C");
   });
 
-  it("ไม่เลือก / ไม่กรอกเลขอ้างอิง → ไม่บันทึกอะไร; บทบาทอื่นเรียกไม่ได้", async () => {
+  it("ไม่เลือก / ไม่กรอกวันที่ → ไม่บันทึกอะไร; บทบาทอื่นเรียกไม่ได้", async () => {
     const id = await approvedRequest((await center()).id);
     await loginAs("ACCOUNTING");
     expect(await payIds([], "2026-10-20", "PV")).toMatchObject({ result: { error: expect.stringContaining("เลือกใบเบิก") } });
-    expect(await payIds([id], "2026-10-20", " ")).toMatchObject({ result: { fieldErrors: { paymentRef: ["กรอกเลขอ้างอิงการจ่าย"] } } });
+    expect(await payIds([id], "", "")).toMatchObject({ result: { fieldErrors: { paidDate: ["กรอกวันที่จ่าย"] } } });
     expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("APPROVED");
 
     await loginAs("ADMIN");

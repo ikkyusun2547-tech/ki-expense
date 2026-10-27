@@ -3,6 +3,7 @@ import type { RequestStatus, Role } from "@/generated/prisma/enums";
 import {
   canCreateRequest,
   canPerform,
+  checkRequestAction,
   checkSignerChange,
   checkTransition,
   isAssignedApprover,
@@ -13,7 +14,7 @@ import {
 
 const ROLES: Role[] = ["CREATOR", "ACCOUNTING", "APPROVER", "ADMIN"];
 const STATUSES: RequestStatus[] = ["CREATED", "PENDING", "APPROVED", "PAID"];
-const ACTIONS: RequestAction[] = ["EDIT", "DELETE", "SUBMIT", "APPROVE", "REJECT", "PAY", "REVERT"];
+const ACTIONS: RequestAction[] = ["EDIT", "DELETE", "SUBMIT", "APPROVE", "REJECT", "PAY", "REVERT", "TRANSFER"];
 
 // ตารางสิทธิ์ที่ตกลงกัน: [บทบาท, การกระทำ, สถานะปัจจุบัน] → สถานะใหม่
 // (อนุมัติในระบบ 2026-10-24: อนุมัติแล้วเข้าคิวบัญชีทันที, ผู้อนุมัติไม่อนุมัติ → กลับเป็นสร้างแล้ว)
@@ -26,6 +27,9 @@ const ALLOWED: [Role, RequestAction, RequestStatus, RequestStatus][] = [
   ["ACCOUNTING", "PAY", "APPROVED", "PAID"],
   ["ADMIN", "REVERT", "PENDING", "CREATED"],
   ["ADMIN", "REVERT", "APPROVED", "CREATED"],
+  ["ADMIN", "TRANSFER", "CREATED", "CREATED"],
+  ["ADMIN", "TRANSFER", "PENDING", "PENDING"],
+  ["ADMIN", "TRANSFER", "APPROVED", "APPROVED"],
 ];
 
 describe("checkTransition", () => {
@@ -63,6 +67,31 @@ describe("checkTransition", () => {
   it("admin อนุมัติแทนไม่ได้, ฝ่ายบัญชีจ่ายใบที่ยังไม่อนุมัติไม่ได้", () => {
     expect(canPerform("ADMIN", "APPROVE", "PENDING")).toBe(false);
     expect(canPerform("ACCOUNTING", "PAY", "PENDING")).toBe(false);
+  });
+});
+
+describe("checkRequestAction", () => {
+  // แก้/ลบ/ส่งได้เฉพาะเจ้าของใบ (ผู้ใช้เลือก 2026-10-27)
+  const draft = { status: "CREATED" as const, createdById: "owner" };
+  const owner = { id: "owner", role: "CREATOR" as const };
+  const other = { id: "other", role: "CREATOR" as const };
+
+  it.each(["EDIT", "DELETE", "SUBMIT"] as const)("%s: เจ้าของทำได้ ผู้จัดทำคนอื่นทำไม่ได้", (action) => {
+    expect(checkRequestAction(owner, action, draft).ok).toBe(true);
+    expect(checkRequestAction(other, action, draft)).toMatchObject({ ok: false, reason: expect.stringContaining("เฉพาะผู้สร้างใบ") });
+  });
+
+  it("สิทธิ์อื่นไม่ขึ้นกับเจ้าของใบ (admin โอน/ย้อนสถานะ, ผู้อนุมัติ)", () => {
+    expect(checkRequestAction({ id: "a", role: "ADMIN" }, "TRANSFER", draft).ok).toBe(true);
+    expect(checkRequestAction({ id: "a", role: "ADMIN" }, "REVERT", { ...draft, status: "PENDING" }).ok).toBe(true);
+    expect(checkRequestAction({ id: "p", role: "APPROVER" }, "APPROVE", { ...draft, status: "PENDING" }).ok).toBe(true);
+  });
+
+  it("เจ้าของก็ยังติดกฎสถานะ", () => {
+    expect(checkRequestAction(owner, "EDIT", { ...draft, status: "PENDING" })).toEqual({
+      ok: false,
+      reason: 'ใบเบิกสถานะ "รออนุมัติ" แก้ไขไม่ได้',
+    });
   });
 });
 

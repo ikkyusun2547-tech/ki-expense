@@ -121,23 +121,20 @@ export function Sidebar({ items, user }: { items: NavItem[]; user: SidebarUser }
 
 // ชื่อระบบ: แถบเมนู = [โลโก้ KI | ชื่อระบบตัวหนา + บรรทัดรองบอกว่าเบิกอะไร] แถวเดียว (ผู้ใช้ตั้งชื่อสั้น "ระบบเบิกค่าบริการ" 2026-10-26)
 // compact = แถบบนจอเล็ก (สูงจำกัด) โลโก้ + ชื่อระบบ
-// โลโก้ public/logo-ki.png = ส่วน KI ที่ตัดจากไฟล์โลโก้บริษัท (ชุดเดียวกับ src/pdf/assets/logo.png ย่อเหลือสูง 128px)
+// โลโก้ public/logo-ki-mark.png = ส่วนเครื่องหมาย KI (กรอบพระอาทิตย์ + KI) จาก logo_ki.png ที่ผู้ใช้ตัดพื้นหลัง (2026-10-27)
+// ด้านในกรอบเติมขาวกลับแล้ว รอบนอกโปร่งใส — วางบนพื้นกรมท่าได้ตรง ๆ ไม่ต้องมีแผ่นขาวรอง
 function Brand({ onNavigate, compact = false }: { onNavigate?: () => void; compact?: boolean }) {
   if (compact) {
     return (
       <Link href="/" onClick={onNavigate} className="flex min-w-0 items-center gap-3">
-        <span className="shrink-0 rounded-md bg-white p-1">
-          <Image src="/logo-ki.png" alt="KI" width={255} height={128} className="h-6 w-auto" priority />
-        </span>
+        <Image src="/logo-ki-mark.png" alt="KI" width={258} height={128} className="h-7 w-auto shrink-0" priority />
         <span className="truncate text-sm font-bold">ระบบเบิกค่าบริการ</span>
       </Link>
     );
   }
   return (
     <Link href="/" onClick={onNavigate} className="flex min-w-0 items-center gap-3">
-      <span className="shrink-0 rounded-lg bg-white p-1.5 shadow-sm">
-        <Image src="/logo-ki.png" alt="KI บริษัท น้ำตาลสุรินทร์ จำกัด" width={255} height={128} className="h-7 w-auto" priority />
-      </span>
+      <Image src="/logo-ki-mark.png" alt="KI บริษัท น้ำตาลสุรินทร์ จำกัด" width={258} height={128} className="h-9 w-auto shrink-0" priority />
       <span className="min-w-0 leading-tight">
         <span className="block truncate text-[15px] font-bold text-white">ระบบเบิกค่าบริการ</span>
         <span className="mt-0.5 block truncate text-xs text-brand-200">อินเทอร์เน็ต · โทรศัพท์</span>

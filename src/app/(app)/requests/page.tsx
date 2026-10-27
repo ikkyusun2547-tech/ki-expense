@@ -1,6 +1,8 @@
 import { CircleCheck, Eye, FilePlus, FileText, Hourglass, Inbox, Plus, Receipt, Search, Send, X } from "lucide-react";
 import type { RequestStatus, ServiceKind } from "@/generated/prisma/enums";
 import { RequestStatusBadge } from "@/components/StatusBadge";
+import { ClickableRow } from "@/components/ClickableRow";
+import { AmountCell, COLUMN, InvoiceCell, PeriodDueCell, ServiceCell } from "@/components/RequestCells";
 import {
   Badge,
   Button,
@@ -8,10 +10,8 @@ import {
   EmptyRow,
   FilterBar,
   FilterSelect,
-  NameCell,
   PageHeader,
   RowLink,
-  rowClass,
   SearchInput,
   StatCard,
   TableCard,
@@ -22,10 +22,7 @@ import {
   type IconType,
 } from "@/components/ui";
 import { kindHref } from "@/lib/auth/routes";
-import { centerLabel, kindTag } from "@/lib/centers/phone";
-import { formatAmount } from "@/lib/money";
 import { canCreateRequest, returnedBy, SERVICE_KIND_LABEL, STATUS_LABEL } from "@/lib/status";
-import { formatThaiDate, toISODate } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
 
@@ -65,6 +62,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
       orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }],
       include: {
         center: { select: { kind: true, name: true, customerCode: true } },
+        createdBy: { select: { name: true } },
         // การกระทำล่าสุดในเส้นทางอนุมัติ — ไว้บอกว่าใบ "สร้างแล้ว" ใบไหนถูกตีกลับ
         logs: {
           where: { action: { in: ["SUBMIT", "APPROVE", "REJECT", "REVERT"] } },
@@ -142,37 +140,41 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
         <table className={tableClass}>
           <thead>
             <tr>
-              <th className={thClass}>{kind === "PHONE" ? "ผู้ใช้บริการ / เบอร์" : kind ? "ศูนย์" : "ศูนย์ / เบอร์"}</th>
-              <th className={thClass}>รอบบริการ</th>
-              <th className={thClass}>เลขที่ใบแจ้งหนี้</th>
-              <th className={`${thClass} text-right`}>ยอด (บาท)</th>
-              <th className={thClass}>ครบกำหนด</th>
+              <th className={thClass}>{kind === "PHONE" ? "เบอร์" : kind ? "ศูนย์" : COLUMN.service}</th>
+              <th className={thClass}>{COLUMN.invoice}</th>
+              <th className={thClass}>{COLUMN.periodDue}</th>
+              <th className={`${thClass} text-right`}>{COLUMN.amount}</th>
               <th className={thClass}>สถานะ</th>
               <th className={thClass} />
             </tr>
           </thead>
           <tbody>
             {requests.map((r) => (
-              <tr key={r.id} className={rowClass}>
+              <ClickableRow key={r.id} href={`/requests/${r.id}`}>
                 <td className={tdClass}>
-                  <NameCell {...centerLabel(r.center)} tag={kind ? undefined : kindTag(r.center)} href={`/requests/${r.id}`} />
+                  <ServiceCell center={r.center} href={`/requests/${r.id}`} showTag={!kind} />
                 </td>
-                <td className={`${tdClass} whitespace-nowrap`}>
-                  {formatThaiDate(toISODate(r.periodStart))} – {formatThaiDate(toISODate(r.periodEnd))}
+                <td className={tdClass}>
+                  <InvoiceCell id={r.id} invoiceNo={r.invoiceNo} hasFile={!!r.invoiceFileKey} />
                 </td>
-                <td className={`${tdClass} tabular-nums`}>{r.invoiceNo}</td>
-                <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>{formatAmount(r.amount)}</td>
-                <td className={`${tdClass} whitespace-nowrap`}>{formatThaiDate(toISODate(r.dueDate))}</td>
+                <td className={tdClass}>
+                  <PeriodDueCell periodStart={r.periodStart} periodEnd={r.periodEnd} dueDate={r.dueDate} />
+                </td>
+                <td className={tdClass}>
+                  <AmountCell request={r} />
+                </td>
                 <td className={tdClass}>
                   <div className="flex flex-wrap items-center gap-1">
                     <RequestStatusBadge status={r.status} />
                     {returnedBy(r.status, r.logs) && <Badge tone="red">ถูกตีกลับ</Badge>}
                   </div>
+                  {/* แก้/ลบ/ส่งได้เฉพาะเจ้าของใบ — บอกให้รู้ว่าใบไหนของคนอื่น */}
+                  {r.createdById !== user.id && <div className="mt-1 text-xs text-slate-500">ผู้จัดทำ: {r.createdBy.name}</div>}
                 </td>
                 <td className={`${tdClass} text-right`}>
                   <RowLink href={`/requests/${r.id}`} icon={Eye}>ดู</RowLink>
                 </td>
-              </tr>
+              </ClickableRow>
             ))}
             {requests.length === 0 && (
               <EmptyRow colSpan={7} icon={q || status ? Inbox : FilePlus}>

@@ -324,6 +324,9 @@ export function TableCard({ children }: { children: ReactNode }) {
 export const tableClass = "w-full text-left text-sm";
 export const thClass = "whitespace-nowrap border-b border-slate-200 bg-slate-50/80 px-4 py-3 text-xs font-semibold text-slate-500";
 export const tdClass = "border-b border-slate-100 px-4 py-3 align-middle text-slate-700";
+// ตารางที่คอลัมน์เยอะ (มีช่องกรอกในแถว) — ช่องไฟแคบลงให้พอดีจอ 1280
+export const thClassDense = thClass.replace("px-4", "px-3");
+export const tdClassDense = tdClass.replace("px-4", "px-3");
 export const rowClass = "transition-colors hover:bg-slate-50/80";
 
 // ปุ่มในคอลัมน์ท้ายตาราง ("ดู", "แก้ไข") — ปุ่มรองขนาดเล็กแบบเดียวกับปุ่มอื่นในแถว
@@ -352,7 +355,7 @@ export function NameCell({ name, code, href, tag }: { name: string; code: string
   return (
     <div>
       {href ? (
-        <Link href={href} className="font-medium text-slate-900 hover:text-brand-700 hover:underline">
+        <Link href={href} className="font-medium text-slate-900 hover:text-brand-700 hover:underline group-hover:text-brand-700 group-hover:underline">
           {name}
         </Link>
       ) : (

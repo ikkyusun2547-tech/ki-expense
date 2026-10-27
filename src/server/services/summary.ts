@@ -9,18 +9,17 @@ export type CenterSummaryRow = CenterSummaryResult & {
 };
 
 // ตารางสรุปรายศูนย์/รายเบอร์ — เฉพาะที่ใช้งานอยู่ (ย้าย/ปิด/ยกเลิก เบิกไม่ได้ จึงไม่ต้องติดตาม)
-// kind ไม่ส่ง = ทั้งศูนย์และเบอร์; ใช้ใบเบิกที่วันครบกำหนดอยู่ในเดือนนี้หรือเดือนหน้าเท่านั้น
+// kind ไม่ส่ง = ทั้งศูนย์และเบอร์; ใช้ใบเบิกที่วันครบกำหนดตั้งแต่เดือนนี้ขึ้นไป (ใบของรอบที่ใหม่กว่านับว่าเดือนนี้เบิกแล้ว)
 export async function getCenterSummaries(today: ISODate, kind?: ServiceKind): Promise<CenterSummaryRow[]> {
   const [y, m] = today.split("-").map(Number);
   const from = fromISODate(`${y}-${String(m).padStart(2, "0")}-01`);
-  const until = new Date(Date.UTC(y, m + 1, 1)); // วันแรกของเดือนถัดจากเดือนหน้า
 
   const centers = await db.center.findMany({
     where: { status: "ACTIVE", ...(kind && { kind }) },
     orderBy: { customerCode: "asc" },
     include: {
       requests: {
-        where: { deletedAt: null, dueDate: { gte: from, lt: until } },
+        where: { deletedAt: null, dueDate: { gte: from } },
         select: { id: true, dueDate: true, status: true },
         orderBy: { createdAt: "desc" },
       },

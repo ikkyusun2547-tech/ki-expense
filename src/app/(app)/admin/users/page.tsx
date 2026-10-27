@@ -1,6 +1,7 @@
+import { ClickableRow } from "@/components/ClickableRow";
 import { Pencil, Plus, Users } from "lucide-react";
 import type { Role } from "@/generated/prisma/enums";
-import { Alert, Badge, ButtonLink, cx, PageHeader, RowLink, rowClass, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
+import { Alert, Badge, ButtonLink, cx, PageHeader, RowLink, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
 import { ROLE_LABEL } from "@/lib/status";
 import { nameInitial } from "@/lib/thai/name";
 import { requireRole } from "@/server/auth";
@@ -53,7 +54,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className={cx(rowClass, !u.active && "opacity-60")}>
+              <ClickableRow key={u.id} href={`/admin/users/${u.id}`} className={cx(!u.active && "opacity-60")}>
                 <td className={tdClass}>
                   <div className="flex items-center gap-3">
                     <span
@@ -88,7 +89,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
                 <td className={`${tdClass} text-right`}>
                   <RowLink href={`/admin/users/${u.id}`} icon={Pencil}>แก้ไข</RowLink>
                 </td>
-              </tr>
+              </ClickableRow>
             ))}
           </tbody>
         </table>

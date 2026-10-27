@@ -3,11 +3,9 @@
 import { Banknote } from "lucide-react";
 import { BulkBar } from "@/components/BulkBar";
 import { ThaiDateInput } from "@/components/ThaiDateInput";
-import { inputClass } from "@/components/ui";
-import { MAX_PAYMENT_REF } from "@/lib/rules/paymentRules";
 import { payMany } from "@/server/actions/accounting";
 
-// ฝ่ายบัญชีติ๊กหลายใบ แล้วบันทึกจ่ายด้วยวันที่ + เลขอ้างอิงเดียวกัน (เช่น โอนรวมครั้งเดียว)
+// ฝ่ายบัญชีติ๊กหลายใบ แล้วบันทึกจ่ายด้วยวันที่เดียวกัน (เช่น โอนรวมครั้งเดียว) — เลขอ้างอิงไม่บังคับ จึงไม่มีช่องที่นี่
 // today มาจากเซิร์ฟเวอร์ (เวลาไทย)
 export function BulkPay({ formId, today }: { formId: string; today: string }) {
   return (
@@ -16,7 +14,7 @@ export function BulkPay({ formId, today }: { formId: string; today: string }) {
       action={payMany}
       submitLabel="บันทึกจ่ายที่เลือก"
       icon={Banknote}
-      confirmText={(n) => `บันทึกการจ่าย ${n} ใบ ด้วยวันที่และเลขอ้างอิงเดียวกัน? หลังบันทึกแล้วใบเบิกจะถูกล็อก`}
+      confirmText={(n) => `บันทึกการจ่าย ${n} ใบ ด้วยวันที่จ่ายเดียวกัน? หลังบันทึกแล้วใบเบิกจะถูกล็อก`}
     >
       {(state) => (
         <>
@@ -34,18 +32,6 @@ export function BulkPay({ formId, today }: { formId: string; today: string }) {
               />
             </span>
             {state.fieldErrors?.paidDate && <span className="text-red-700">{state.fieldErrors.paidDate[0]}</span>}
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-slate-500">
-            เลขอ้างอิงการจ่าย
-            <input
-              name="paymentRef"
-              defaultValue={state.values?.paymentRef}
-              required
-              maxLength={MAX_PAYMENT_REF}
-              aria-invalid={!!state.fieldErrors?.paymentRef}
-              className={`${inputClass} w-52 tabular-nums`}
-            />
-            {state.fieldErrors?.paymentRef && <span className="text-red-700">{state.fieldErrors.paymentRef[0]}</span>}
           </label>
         </>
       )}

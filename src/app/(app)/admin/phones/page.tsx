@@ -1,3 +1,4 @@
+import { ClickableRow } from "@/components/ClickableRow";
 import { CircleCheck, CircleX, Inbox, Pencil, Plus, Search, Smartphone, Upload, X } from "lucide-react";
 import { CenterStatusBadge } from "@/components/StatusBadge";
 import {
@@ -9,7 +10,6 @@ import {
   NameCell,
   PageHeader,
   RowLink,
-  rowClass,
   SearchInput,
   StatCard,
   TableCard,
@@ -135,7 +135,7 @@ export default async function PhonesPage({ searchParams }: PageProps<"/admin/pho
           </thead>
           <tbody>
             {phones.map((p) => (
-              <tr key={p.id} className={rowClass}>
+              <ClickableRow key={p.id} href={`/admin/phones/${p.id}`}>
                 <td className={tdClass}>
                   <NameCell name={formatPhone(p.customerCode)} code={`ผู้ใช้: ${p.name}`} href={`/admin/phones/${p.id}`} />
                 </td>
@@ -150,7 +150,7 @@ export default async function PhonesPage({ searchParams }: PageProps<"/admin/pho
                 <td className={`${tdClass} text-right`}>
                   <RowLink href={`/admin/phones/${p.id}`} icon={Pencil}>แก้ไข</RowLink>
                 </td>
-              </tr>
+              </ClickableRow>
             ))}
             {phones.length === 0 && (
               <EmptyRow colSpan={8} icon={Inbox}>

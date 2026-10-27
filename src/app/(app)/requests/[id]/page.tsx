@@ -1,16 +1,17 @@
-import { ArrowLeft, Banknote, Check, CircleX, Clock, ExternalLink, FileText, Paperclip, Pencil, Printer, Receipt, Send, Stamp, Trash, Undo2 } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, Banknote, Check, CircleX, Clock, ExternalLink, FileText, Paperclip, Pencil, Printer, Receipt, Send, Stamp, Trash, Undo2 } from "lucide-react";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import type { LogAction, RequestStatus } from "@/generated/prisma/enums";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import { PhoneChargesTable } from "@/components/PhoneCharges";
+import { TransferForm } from "@/components/TransferForm";
 import { Alert, ButtonAnchor, ButtonLink, Card, CardTitle, cx, PageHeader, type IconType } from "@/components/ui";
 import { kindHref } from "@/lib/auth/routes";
 import { centerCode } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { chosenSignersOf, resolveSigners, type ResolvedSigner } from "@/lib/pdf/memoData";
 import { storedCharges } from "@/lib/rules/phoneCharges";
-import { ACTION_LABEL, canPerform, isAssignedApprover, returnedBy, STATUS_LABEL } from "@/lib/status";
+import { ACTION_LABEL, checkRequestAction, isAssignedApprover, returnedBy, STATUS_LABEL, type RequestAction } from "@/lib/status";
 import { bahtText } from "@/lib/thai/bahtText";
 import { daysInclusive, formatThaiDate, formatThaiDateTime, toISODate, todayISO } from "@/lib/thai/date";
 import { requireUser } from "@/server/auth";
@@ -30,9 +31,10 @@ const LOG_ICON: Record<LogAction, { icon: IconType; className: string }> = {
   PAY: { icon: Banknote, className: "bg-emerald-100 text-emerald-700" },
   REVERT: { icon: Undo2, className: "bg-orange-100 text-orange-700" },
   DELETE: { icon: Trash, className: "bg-red-100 text-red-700" },
+  TRANSFER: { icon: ArrowRightLeft, className: "bg-slate-100 text-slate-600" },
 };
 
-export default async function RequestDetailPage({ params }: PageProps<"/requests/[id]">) {
+export default async function RequestDetailPage({ params, searchParams }: PageProps<"/requests/[id]">) {
   // ทุกบทบาทดูรายละเอียดได้ (บัญชีเปิดจากหน้าฝ่ายบัญชี) — ปุ่มที่ทำได้ขึ้นกับ state machine
   const user = await requireUser();
 
@@ -41,7 +43,7 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
     where: { id },
     include: {
       center: true,
-      createdBy: { select: { name: true, title: true } },
+      createdBy: { select: { id: true, name: true, title: true } },
       logs: { orderBy: { createdAt: "asc" }, include: { actor: { select: { name: true } } } },
     },
   });
@@ -50,7 +52,18 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
   const periodStart = toISODate(request.periodStart);
   const periodEnd = toISODate(request.periodEnd);
   const deleted = !!request.deletedAt;
-  const can = (action: Parameters<typeof canPerform>[1]) => !deleted && canPerform(user.role, action, request.status);
+  // แก้/ลบ/ส่งได้เฉพาะเจ้าของใบ (checkRequestAction)
+  const can = (action: RequestAction) => !deleted && checkRequestAction(user, action, request).ok;
+  const othersDraft = !deleted && request.status === "CREATED" && user.role === "CREATOR" && request.createdById !== user.id;
+  const transferred = (await searchParams).transferred === "1";
+  // admin โอนใบให้ผู้จัดทำคนอื่น (เจ้าของลา/ลาออก)
+  const creators = can("TRANSFER")
+    ? await db.user.findMany({
+        where: { role: "CREATOR", active: true, id: { not: request.createdById } },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      })
+    : [];
   const differsFromNormal = !request.amount.equals(request.center.normalAmount);
 
   // ผู้ลงนามที่จะพิมพ์ในใบเบิก: ที่เลือกไว้กับใบนี้ (บัญชีผู้ใช้) หรือค่าเริ่มต้น
@@ -82,6 +95,12 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
         </div>
       ) : (
         <Stepper status={request.status} />
+      )}
+
+      {transferred && (
+        <div className="mb-6">
+          <Alert tone="success">โอนใบเบิกให้ {request.createdBy.name} แล้ว</Alert>
+        </div>
       )}
 
       {returned && (
@@ -238,6 +257,12 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
                 <p className="text-sm text-slate-500">รอ {request.approverName} อนุมัติ</p>
               )}
               {request.status === "PAID" && <p className="text-sm text-slate-500">ใบเบิกนี้จ่ายแล้ว ถูกล็อก แก้ไขไม่ได้</p>}
+              {othersDraft && (
+                <p className="text-xs text-slate-500">
+                  ใบเบิกนี้เป็นของ {request.createdBy.name} — แก้ไข/ลบ/ส่งขออนุมัติได้เฉพาะผู้สร้างใบ ถ้า {request.createdBy.name} ไม่อยู่
+                  ให้ผู้ดูแลระบบโอนใบให้
+                </p>
+              )}
               {!deleted && request.status !== "CREATED" && user.role === "CREATOR" && (
                 <p className="text-xs text-slate-500">
                   ใบเบิกที่{STATUS_LABEL[request.status]}แก้ไขไม่ได้ ถ้าต้องแก้ ให้ผู้อนุมัติกด “ไม่อนุมัติ” หรือติดต่อผู้ดูแลระบบให้ย้อนสถานะ
@@ -245,6 +270,20 @@ export default async function RequestDetailPage({ params }: PageProps<"/requests
               )}
             </div>
           </Card>
+
+          {can("TRANSFER") && (
+            <Card>
+              <CardTitle icon={ArrowRightLeft}>โอนใบเบิก</CardTitle>
+              <p className="mb-3 text-sm text-slate-600">
+                ตอนนี้เป็นของ {request.createdBy.name} — ผู้รับโอนจะแก้ไข/ลบ/ส่งขออนุมัติได้แทน
+              </p>
+              <TransferForm
+                target={{ requestId: request.id }}
+                creators={creators}
+                confirmText={`โอนใบเบิกนี้จาก ${request.createdBy.name} ให้ผู้จัดทำที่เลือก?`}
+              />
+            </Card>
+          )}
 
           {can("PAY") && (
             <Card>

@@ -3,7 +3,9 @@ import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import { PhoneChargesNote } from "@/components/PhoneCharges";
-import { Alert, ButtonAnchor, cx, EmptyRow, NameCell, PageHeader, RowLink, rowClass, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
+import { ClickableRow } from "@/components/ClickableRow";
+import { AmountCell, COLUMN, PeriodDueCell, ServiceCell } from "@/components/RequestCells";
+import { Alert, ButtonAnchor, cx, EmptyRow, NameCell, PageHeader, RowLink, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
 import { centerLabel, kindTag } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { daysUntil } from "@/lib/rules/centerSummary";
@@ -102,9 +104,9 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                 <thead>
                   <tr>
                     {isApprover && <th className={`${thClass} w-10`} />}
-                    <th className={thClass}>ศูนย์ / เบอร์</th>
-                    <th className={thClass}>รอบบริการ / ครบกำหนด</th>
-                    <th className={`${thClass} text-right`}>ยอด (บาท)</th>
+                    <th className={thClass}>{COLUMN.service}</th>
+                    <th className={thClass}>{COLUMN.periodDue}</th>
+                    <th className={`${thClass} text-right`}>{COLUMN.amount}</th>
                     {/* ผู้อนุมัติ: เว้นที่ให้ปุ่ม — ผู้ขออนุมัติดูได้ในหน้าใบเบิก; admin (ไม่มีปุ่ม) เห็นทั้งสองคอลัมน์ */}
                     {!isApprover && <th className={thClass}>ผู้ขออนุมัติ</th>}
                     {!isApprover && <th className={thClass}>ผู้อนุมัติ</th>}
@@ -113,29 +115,23 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                 </thead>
                 <tbody>
                   {pending.map((r) => {
-                    const due = toISODate(r.dueDate);
                     return (
-                      <tr key={r.id} className={rowClass}>
+                      <ClickableRow key={r.id} href={`/requests/${r.id}`}>
                         {isApprover && (
                           <td className={tdClass}>
                             <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
                           </td>
                         )}
                         <td className={`${tdClass} whitespace-nowrap`}>
-                          <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                          <ServiceCell center={r.center} href={`/requests/${r.id}`} />
                           {/* ดูไฟล์ได้ที่ปุ่ม "ดู" — แจ้งเฉพาะใบที่ไม่ได้แนบ (จุดที่ผู้อนุมัติควรสังเกต) */}
                           {!r.invoiceFileKey && <div className="text-xs font-medium text-amber-700">ไม่ได้แนบใบแจ้งหนี้</div>}
                         </td>
-                        <td className={`${tdClass} whitespace-nowrap`}>
-                          <div>{formatThaiDateRange(toISODate(r.periodStart), toISODate(r.periodEnd))}</div>
-                          <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-                            ครบกำหนด {formatThaiDate(due)}
-                            <DueBadge daysLeft={daysUntil(today, due)} />
-                          </div>
+                        <td className={tdClass}>
+                          <PeriodDueCell periodStart={r.periodStart} periodEnd={r.periodEnd} dueDate={r.dueDate} today={today} />
                         </td>
-                        <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>
-                          {formatAmount(r.amount)}
-                          <PhoneChargesNote request={r} />
+                        <td className={tdClass}>
+                          <AmountCell request={r} />
                         </td>
                         {!isApprover && <td className={`${tdClass} whitespace-nowrap`}>{r.requesterName ?? r.createdBy.name}</td>}
                         {!isApprover && <td className={`${tdClass} whitespace-nowrap`}>{r.approverName}</td>}
@@ -147,7 +143,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                             {isApprover && <ApproveButton id={r.id} />}
                           </div>
                         </td>
-                      </tr>
+                      </ClickableRow>
                     );
                   })}
                   {pending.length === 0 && (
@@ -266,9 +262,10 @@ async function DoneTable({ where, showApprover }: { where: { approverId?: string
       <table className={tableClass}>
         <thead>
           <tr>
+            <th className={thClass}>{COLUMN.service}</th>
+            <th className={thClass}>{COLUMN.periodDue}</th>
+            <th className={`${thClass} text-right`}>{COLUMN.amount}</th>
             <th className={thClass}>อนุมัติเมื่อ</th>
-            <th className={thClass}>ศูนย์ / เบอร์</th>
-            <th className={`${thClass} text-right`}>ยอด (บาท)</th>
             <th className={thClass}>ผู้ขออนุมัติ</th>
             {showApprover && <th className={thClass}>ผู้อนุมัติ</th>}
             <th className={thClass}>สถานะ</th>
@@ -276,24 +273,26 @@ async function DoneTable({ where, showApprover }: { where: { approverId?: string
         </thead>
         <tbody>
           {requests.map((r) => (
-            <tr key={r.id} className={rowClass}>
-              <td className={`${tdClass} whitespace-nowrap`}>{r.approvedAt && formatThaiDateTime(r.approvedAt)}</td>
+            <ClickableRow key={r.id} href={`/requests/${r.id}`}>
               <td className={tdClass}>
-                <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
+                <ServiceCell center={r.center} href={`/requests/${r.id}`} />
               </td>
-              <td className={`${tdClass} text-right font-semibold tabular-nums text-slate-900`}>
-                {formatAmount(r.amount)}
-                <PhoneChargesNote request={r} />
+              <td className={tdClass}>
+                <PeriodDueCell periodStart={r.periodStart} periodEnd={r.periodEnd} dueDate={r.dueDate} />
               </td>
-              <td className={tdClass}>{r.requesterName ?? r.createdBy.name}</td>
+              <td className={tdClass}>
+                <AmountCell request={r} />
+              </td>
+              <td className={`${tdClass} whitespace-nowrap`}>{r.approvedAt && formatThaiDateTime(r.approvedAt)}</td>
+              <td className={`${tdClass} whitespace-nowrap`}>{r.requesterName ?? r.createdBy.name}</td>
               {showApprover && <td className={tdClass}>{r.approverName}</td>}
               <td className={tdClass}>
                 <RequestStatusBadge status={r.status} />
               </td>
-            </tr>
+            </ClickableRow>
           ))}
           {requests.length === 0 && (
-            <EmptyRow colSpan={showApprover ? 6 : 5} icon={Inbox}>
+            <EmptyRow colSpan={showApprover ? 7 : 6} icon={Inbox}>
               ยังไม่มีใบเบิกที่อนุมัติแล้ว
             </EmptyRow>
           )}

@@ -3,6 +3,7 @@ import { daysInclusive, type ISODate } from "@/lib/thai/date";
 
 // สรุปสถานะการเบิกของศูนย์ (ตารางสรุปรายศูนย์)
 // - "เบิกแล้ว" ของเดือนใด = มีใบเบิก (ยังไม่ถูกลบ) ที่วันครบกำหนดชำระอยู่ในเดือนนั้น
+//   หรือมีใบเบิกของรอบที่ใหม่กว่าแล้ว (ผู้ใช้เลือก 2026-10-27 — บิลก่อนหน้าถือว่าเรียบร้อย เช่น จ่ายด้วยกระดาษก่อนเริ่มใช้ระบบ)
 // - "ใกล้ครบกำหนด" = เหลือไม่เกิน DUE_SOON_DAYS วันถึงวันครบกำหนดประจำเดือน แต่ยังไม่เบิก
 
 export const DUE_SOON_DAYS = 7;
@@ -37,15 +38,19 @@ export function summarizeCenter(dueDay: number, requests: SummaryRequest[], toda
   const thisDue = dueDateInMonth(y, m, dueDay);
   const nextDue = m === 12 ? dueDateInMonth(y + 1, 1, dueDay) : dueDateInMonth(y, m + 1, dueDay);
 
-  const requestFor = (due: ISODate) => requests.find((r) => monthKey(r.dueDate) === monthKey(due));
-  const result = (state: CenterSummaryState, dueDate: ISODate): CenterSummaryResult => ({
+  // ใบของเดือนนั้นพอดีก่อน ไม่มีก็ใบของรอบถัดไปที่ใกล้ที่สุด
+  const requestFor = (due: ISODate) =>
+    requests.find((r) => monthKey(r.dueDate) === monthKey(due)) ??
+    requests.filter((r) => monthKey(r.dueDate) > monthKey(due)).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+  const result = (state: CenterSummaryState, dueDate: ISODate, request?: SummaryRequest): CenterSummaryResult => ({
     state,
     dueDate,
     daysLeft: daysUntil(today, dueDate),
-    request: requestFor(dueDate),
+    ...(request && { request }),
   });
 
-  if (!requestFor(thisDue)) {
+  const current = requestFor(thisDue);
+  if (!current) {
     const daysLeft = daysUntil(today, thisDue);
     if (daysLeft < 0) return result("OVERDUE", thisDue);
     return result(daysLeft <= DUE_SOON_DAYS ? "DUE_SOON" : "NOT_YET", thisDue);
@@ -53,7 +58,9 @@ export function summarizeCenter(dueDay: number, requests: SummaryRequest[], toda
 
   // เดือนนี้เบิกแล้ว — ถ้าเดือนหน้าใกล้ถึงกำหนดแล้วแต่ยังไม่เบิก ให้เตือนล่วงหน้า
   if (!requestFor(nextDue) && daysUntil(today, nextDue) <= DUE_SOON_DAYS) return result("DUE_SOON", nextDue);
-  return result("REQUESTED", thisDue);
+  // ใบของรอบที่ใหม่กว่า → แสดงวันครบกำหนดของใบนั้น (ไม่ใช่ของเดือนนี้ที่ไม่มีใบ)
+  const shownDue = monthKey(current.dueDate) === monthKey(thisDue) ? thisDue : current.dueDate;
+  return result("REQUESTED", shownDue, current);
 }
 
 // ลำดับในตาราง: เลยกำหนด → ใกล้ครบ (เหลือน้อยก่อน) → ยังไม่ถึงรอบ → เบิกแล้ว

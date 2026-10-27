@@ -11,7 +11,15 @@ import { fieldErrorsOf, memoTextsSchema } from "@/lib/validation";
 import { toISODate, todayISO } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
-import { createRequest, setRequestSigners, transitionRequest, updateRequest, type RequestInput } from "@/server/services/requests";
+import {
+  createRequest,
+  setRequestSigners,
+  transferOpenRequests,
+  transferRequest,
+  transitionRequest,
+  updateRequest,
+  type RequestInput,
+} from "@/server/services/requests";
 
 export type CenterSummary = {
   id: string;
@@ -181,4 +189,32 @@ export async function changeRequestSigners(_prev: FormState, formData: FormData)
   if (!outcome.ok) return { error: outcome.error };
 
   redirect(`/requests/${requestId}?signers=1`);
+}
+
+// admin โอนใบเบิกนี้ให้ผู้จัดทำคนอื่น (หน้าใบเบิก)
+export async function transferRequestOwner(_prev: FormState, formData: FormData): Promise<FormState> {
+  const actor = await requireRole("ADMIN");
+
+  const requestId = String(formData.get("id") ?? "");
+  const toUserId = String(formData.get("toUserId") ?? "");
+  if (!toUserId) return { error: "เลือกผู้จัดทำที่จะรับใบเบิก" };
+
+  const outcome = await transferRequest({ requestId, toUserId, actor });
+  if (!outcome.ok) return { error: outcome.error };
+
+  redirect(`/requests/${requestId}?transferred=1`);
+}
+
+// admin โอนใบเบิกที่ยังไม่จ่ายทั้งหมดของผู้จัดทำคนหนึ่ง (หน้าแก้ไขผู้ใช้ — เช่น ลาออก/ย้ายงาน)
+export async function transferUserRequests(_prev: FormState, formData: FormData): Promise<FormState> {
+  const actor = await requireRole("ADMIN");
+
+  const fromUserId = String(formData.get("fromUserId") ?? "");
+  const toUserId = String(formData.get("toUserId") ?? "");
+  if (!toUserId) return { error: "เลือกผู้จัดทำที่จะรับใบเบิก" };
+
+  const result = await transferOpenRequests({ fromUserId, toUserId, actor });
+  if (result.ok === 0 && result.error) return { error: result.error };
+
+  redirect(`/admin/users/${fromUserId}?transferred=${result.ok}${result.failed ? `&fail=${result.failed}` : ""}`);
 }

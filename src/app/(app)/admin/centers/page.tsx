@@ -1,3 +1,4 @@
+import { ClickableRow } from "@/components/ClickableRow";
 import { ArrowRightLeft, Building, CircleCheck, CircleX, Inbox, Pencil, Plus, Search, Upload, X } from "lucide-react";
 import type { CenterStatus } from "@/generated/prisma/enums";
 import { CenterStatusBadge } from "@/components/StatusBadge";
@@ -10,7 +11,6 @@ import {
   NameCell,
   PageHeader,
   RowLink,
-  rowClass,
   SearchInput,
   StatCard,
   TableCard,
@@ -132,7 +132,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
           </thead>
           <tbody>
             {centers.map((c) => (
-              <tr key={c.id} className={rowClass}>
+              <ClickableRow key={c.id} href={`/admin/centers/${c.id}`}>
                 <td className={tdClass}>
                   <NameCell name={c.name} code={c.customerCode} href={`/admin/centers/${c.id}`} />
                 </td>
@@ -147,7 +147,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
                 <td className={`${tdClass} text-right`}>
                   <RowLink href={`/admin/centers/${c.id}`} icon={Pencil}>แก้ไข</RowLink>
                 </td>
-              </tr>
+              </ClickableRow>
             ))}
             {centers.length === 0 && (
               <EmptyRow colSpan={8} icon={Inbox}>
