@@ -45,6 +45,11 @@ export function todayISO(now: Date = new Date()): ISODate {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(now);
 }
 
+// เวลาไทย "10:30" (เวลาเหตุการณ์ เช่น อนุมัติในระบบ)
+export function formatThaiTime(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date);
+}
+
 export function addDays(iso: ISODate, days: number): ISODate {
   return toISODate(new Date(fromISODate(iso).getTime() + days * DAY_MS));
 }

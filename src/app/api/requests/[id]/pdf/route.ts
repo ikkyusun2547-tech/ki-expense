@@ -14,6 +14,8 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/requests/[i
     include: {
       center: { select: { kind: true, name: true, customerCode: true, provider: true } },
       createdBy: { select: { name: true, title: true } },
+      // วันที่ส่งขออนุมัติครั้งล่าสุด (ใต้ชื่อผู้ขออนุมัติ) — ใบที่ถูกตีกลับเป็น "สร้างแล้ว" ยังไม่นับจนกว่าจะส่งใหม่
+      logs: { where: { action: "SUBMIT" }, orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
     },
   });
   if (!request || request.deletedAt) return new Response("ไม่พบใบเบิกนี้", { status: 404 });
@@ -30,6 +32,7 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/requests/[i
       periodEnd: toISODate(request.periodEnd),
       creator: request.createdBy,
       signers: chosenSignersOf(request),
+      submittedAt: request.status === "CREATED" ? null : (request.logs[0]?.createdAt ?? null),
       approvedAt: request.approvedAt,
       texts: request, // จาก / เรียน / เพื่อ ของใบนี้
     }),

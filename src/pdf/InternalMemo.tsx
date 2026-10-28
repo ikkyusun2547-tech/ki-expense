@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   signature: { width: 270, alignItems: "center", marginBottom: 38 },
   signLine: { flexDirection: "row", alignSelf: "stretch" },
   signRole: { width: 66, textAlign: "right" },
-  approvedNote: { marginTop: 2, fontSize: SIZE.pageNo, color: "#333" },
+  signDate: { marginTop: 2 },
   formCode: { marginTop: 5, fontSize: SIZE.formCode, color: "#333" },
 });
 
@@ -152,8 +152,8 @@ export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | 
           <T style={styles.closing}>{data.closing}</T>
 
           <View style={styles.signatures}>
-            <Signature role="ผู้ขออนุมัติ" person={data.requester} />
-            <Signature role="ผู้อนุมัติ" person={data.approver} note={data.approvedNote} />
+            <Signature role="ผู้ขออนุมัติ" person={data.requester} date={data.requesterDate} />
+            <Signature role="ผู้อนุมัติ" person={data.approver} date={data.approverDate} />
           </View>
         </View>
 
@@ -165,8 +165,8 @@ export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | 
 
 const DOTS = "..................................................";
 
-// ชื่อ/ตำแหน่งว่าง (ยังไม่เลือกผู้อนุมัติ) → จุดไข่ปลาให้เขียนมือ; note = เวลาที่อนุมัติในระบบ
-function Signature({ role, person, note }: { role: string; person: { name: string; title: string }; note?: string | null }) {
+// ชื่อ/ตำแหน่งว่าง (ยังไม่เลือกผู้อนุมัติ) → จุดไข่ปลาให้เขียนมือ; date = บรรทัดวันที่ (ระบบเติม หรือจุดให้เขียนมือ)
+function Signature({ role, person, date }: { role: string; person: { name: string; title: string }; date: string }) {
   return (
     <View style={styles.signature}>
       <View style={styles.signLine}>
@@ -175,7 +175,7 @@ function Signature({ role, person, note }: { role: string; person: { name: strin
       </View>
       <T>{`(${person.name || DOTS})`}</T>
       <T>{person.title || DOTS}</T>
-      {note && <T style={styles.approvedNote}>{note}</T>}
+      <T style={styles.signDate}>{date}</T>
     </View>
   );
 }

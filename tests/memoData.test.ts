@@ -60,7 +60,8 @@ describe("buildMemo", () => {
   it("ผู้ขออนุมัติ = ผู้จัดทำ + ตำแหน่งในบัญชี; ผู้อนุมัติตามที่เลือก; ยังไม่อนุมัติ; รหัสฟอร์มคงที่", () => {
     expect(memo.requester).toEqual({ name: "นางสาวทดสอบ จัดทำ", title: "เจ้าหน้าที่รัฐกิจสัมพันธ์" });
     expect(memo.approver).toEqual(approver);
-    expect(memo.approvedNote).toBeNull();
+    expect(memo.requesterDate).toBe("วันที่ ......../......../........"); // ยังไม่ส่ง → เว้นให้เขียนมือ
+    expect(memo.approverDate).toBe("วันที่ ......../......../........");
     expect(memo.formCode).toBe("FM-50000-02 Rev.02 วันบังคับใช้ 05/07/2566");
   });
 
@@ -69,9 +70,10 @@ describe("buildMemo", () => {
     expect(m.requester.title).toBe("เจ้าหน้าที่ธุรการ");
   });
 
-  it("อนุมัติในระบบแล้ว → พิมพ์เวลาอนุมัติ (เวลาไทย, พ.ศ.)", () => {
-    const m = buildMemo({ ...base, approvedAt: new Date("2026-10-24T03:30:00Z") });
-    expect(m.approvedNote).toBe("อนุมัติในระบบ 24 ต.ค. 2569 10:30 น.");
+  it("ส่ง/อนุมัติในระบบแล้ว → วันที่ใต้ลายเซ็น (เวลาไทย, พ.ศ.)", () => {
+    const m = buildMemo({ ...base, submittedAt: new Date("2026-10-23T17:30:00Z"), approvedAt: new Date("2026-10-24T03:30:00Z") });
+    expect(m.requesterDate).toBe("วันที่ 24/10/2569"); // 00:30 น. เวลาไทย = วันถัดไปของ UTC
+    expect(m.approverDate).toBe("วันที่ 24/10/2569 (อนุมัติในระบบ 10:30 น.)");
   });
 
   it("ค่ายของศูนย์ (ทะเบียนศูนย์) → ทั้งเรื่องและคอลัมน์ระบบ", () => {

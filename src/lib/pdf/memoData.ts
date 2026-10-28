@@ -2,7 +2,7 @@ import type { ServiceKind } from "@/generated/prisma/enums";
 import { formatPhone } from "@/lib/centers/phone";
 import { formatAmount, type AmountInput } from "@/lib/money";
 import { bahtText } from "@/lib/thai/bahtText";
-import { beYear, formatBEDate, formatThaiDate, formatThaiDateTime, thaiMonthName, type ISODate } from "@/lib/thai/date";
+import { beYear, formatBEDate, formatThaiDate, formatThaiTime, thaiMonthName, todayISO, type ISODate } from "@/lib/thai/date";
 
 // ข้อมูลบนใบเบิกแบบ "บันทึกภายใน" (FM-50000-02) — แยกจากหน้าตา PDF เพื่อทดสอบข้อความได้ตรง ๆ
 // วันที่ทุกจุดเป็น พ.ศ. ตามฟอร์มจริง; ค่าอินเทอร์เน็ตกับค่าโทรศัพท์ใช้ฟอร์มเดียวกัน ต่างแค่ข้อความ (KIND_TEXT)
@@ -112,7 +112,8 @@ export type MemoInput = {
   periodEnd?: ISODate; // วันสิ้นสุดรอบบริการ — ค่าโทรศัพท์ใช้เป็นเดือนของรอบค่าใช้บริการ
   creator: Creator; // ผู้จัดทำ (ผู้ขออนุมัติค่าเริ่มต้น)
   signers?: ChosenSigners; // ผู้ลงนามที่เลือกไว้กับใบเบิก
-  approvedAt?: Date | null; // อนุมัติในระบบแล้ว → พิมพ์เวลาอนุมัติใต้ชื่อผู้อนุมัติ
+  submittedAt?: Date | null; // ส่งขออนุมัติล่าสุด → วันที่ใต้ชื่อผู้ขออนุมัติ
+  approvedAt?: Date | null; // อนุมัติในระบบแล้ว → วันที่ + เวลาอนุมัติใต้ชื่อผู้อนุมัติ
   texts: MemoTexts;
 };
 
@@ -137,9 +138,13 @@ export type MemoData = {
   closing: string;
   requester: { name: string; title: string };
   approver: { name: string; title: string };
-  approvedNote: string | null; // "อนุมัติในระบบ 24 ต.ค. 2569 10:30 น."
+  // บรรทัดวันที่ใต้ลายเซ็น: ระบบรู้วันที่ → พิมพ์ให้, ยังไม่ถึงขั้นนั้น → จุดให้เขียนมือ
+  requesterDate: string; // "วันที่ 28/10/2569"
+  approverDate: string; // "วันที่ 29/10/2569 (อนุมัติในระบบ 10:30 น.)"
   formCode: string;
 };
+
+const BLANK_DATE = "วันที่ ......../......../........";
 
 export function buildMemo(input: MemoInput): MemoData {
   const { texts: s } = input;
@@ -177,7 +182,10 @@ export function buildMemo(input: MemoInput): MemoData {
     closing: `จึงเรียนมาเพื่อ${s.purpose}`,
     requester: { name: requester.name, title: requester.title },
     approver: { name: approver.name, title: approver.title },
-    approvedNote: input.approvedAt ? `อนุมัติในระบบ ${formatThaiDateTime(input.approvedAt)} น.` : null,
+    requesterDate: input.submittedAt ? `วันที่ ${formatBEDate(todayISO(input.submittedAt))}` : BLANK_DATE,
+    approverDate: input.approvedAt
+      ? `วันที่ ${formatBEDate(todayISO(input.approvedAt))} (อนุมัติในระบบ ${formatThaiTime(input.approvedAt)} น.)`
+      : BLANK_DATE,
     formCode: FORM_CODE,
   };
 }

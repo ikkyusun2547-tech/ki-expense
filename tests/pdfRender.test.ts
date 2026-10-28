@@ -17,6 +17,7 @@ describe("renderInternalMemo", () => {
       creator: { name: "นางสาวทดสอบ จัดทำ", title: "เจ้าหน้าที่ธุรการ" },
       // ผู้อนุมัติ = บัญชีผู้ใช้ที่เลือก (ตำแหน่งตามคนนั้น) + เวลาที่อนุมัติในระบบ
       signers: { requester: null, approver: { name: "นางตัวอย่าง รักษาการ", title: "รักษาการผู้จัดการส่วน" } },
+      submittedAt: new Date("2026-10-23T02:00:00Z"),
       approvedAt: new Date("2026-10-24T03:30:00Z"),
       texts: DEFAULT_MEMO_TEXTS,
     });
