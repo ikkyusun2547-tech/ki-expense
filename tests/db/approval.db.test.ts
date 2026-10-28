@@ -1,9 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GET as getRequestPdf } from "@/app/api/requests/[id]/pdf/route";
-import { initialFormState } from "@/lib/formState";
-import { approveMany, findCenterByCode } from "@/server/actions/requests";
+import { findCenterByCode } from "@/server/actions/requests";
 import { db } from "@/server/db";
-import { run } from "./helpers";
 import { requestFixtures } from "./requestFixtures";
 
 // อนุมัติในระบบ (2026-10-24): สร้างแล้ว → ส่งขออนุมัติ → ผู้อนุมัติที่เลือกไว้อนุมัติ (เข้าคิวบัญชี) / ไม่อนุมัติ (กลับไปแก้)
@@ -235,36 +233,5 @@ describe("ส่งขออนุมัติ / อนุมัติ / ไม�
     await loginAs("ADMIN");
     expect(await status(id, "REVERT", "เลือกศูนย์ผิด")).toEqual({ redirect: `/requests/${id}` });
     expect(await requestOf(id)).toMatchObject({ status: "CREATED", approvedAt: null });
-  });
-});
-
-describe("อนุมัติทีละหลายใบ", () => {
-  const approveIds = (ids: string[]) => {
-    const fd = new FormData();
-    for (const id of ids) fd.append("ids", id);
-    return run(() => approveMany(initialFormState, fd));
-  };
-
-  it("อนุมัติเฉพาะใบที่ส่งมาให้ตัวเอง ใบอื่นข้ามแล้วแจ้งจำนวน", async () => {
-    const mine1 = await pendingRequest((await center()).id);
-    const mine2 = await pendingRequest((await center()).id);
-    // ใบของผู้อนุมัติอีกคน
-    await loginAs("CREATOR");
-    const other = idFrom(await save(valid((await center()).id)));
-    await pickSigners(other, "", await userId("APPROVER2"));
-    await status(other, "SUBMIT");
-
-    await loginAs("APPROVER");
-    expect(await approveIds([mine1, mine2, other])).toEqual({ redirect: "/approvals?done=approve&n=2&fail=1" });
-    expect((await requestOf(mine1)).status).toBe("APPROVED");
-    expect((await requestOf(mine2)).status).toBe("APPROVED");
-    expect((await requestOf(other)).status).toBe("PENDING");
-  });
-
-  it("ไม่เลือกเลย → แจ้งให้เลือก; ผู้จัดทำเรียกไม่ได้", async () => {
-    await loginAs("APPROVER");
-    expect(await approveIds([])).toEqual({ result: { error: "เลือกใบเบิกที่จะอนุมัติก่อน" } });
-    await loginAs("CREATOR");
-    expect(await approveIds(["x"])).toEqual({ redirect: "/" });
   });
 });

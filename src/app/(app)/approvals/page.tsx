@@ -12,11 +12,8 @@ import { daysUntil } from "@/lib/rules/centerSummary";
 import { formatThaiDate, formatThaiDateRange, formatThaiDateTime, todayISO, toISODate } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
-import { BulkCheckbox } from "@/components/BulkBar";
 import { ApproveButton } from "./ApproveButton";
-import { BulkApprove } from "./BulkApprove";
 
-const BULK_FORM = "bulk-approve";
 
 const TABS = [
   { key: "pending", label: "รออนุมัติ", icon: Clock, href: "/approvals" },
@@ -29,7 +26,7 @@ const TABS = [
 ] as const;
 
 const DONE_MESSAGE: Record<string, string> = {
-  approve: "อนุมัติแล้ว{n} ใบเบิกส่งต่อให้ฝ่ายบัญชีเรียบร้อย",
+  approve: "อนุมัติแล้ว ใบเบิกส่งต่อให้ฝ่ายบัญชีเรียบร้อย",
   reject: "ไม่อนุมัติแล้ว ใบเบิกกลับไปให้ผู้จัดทำแก้ไข",
 };
 
@@ -47,10 +44,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
 
   const params = await searchParams;
   const tab = params.tab === "done" ? "done" : "pending";
-  // อนุมัติทีละหลายใบ: n = จำนวนที่สำเร็จ, fail = จำนวนที่ไม่สำเร็จ (สถานะเปลี่ยนไประหว่างนั้น)
-  const n = Number(params.n) || 0;
-  const fail = Number(params.fail) || 0;
-  const done = typeof params.done === "string" ? DONE_MESSAGE[params.done]?.replace("{n}", n > 1 ? ` ${n} ใบ` : "") : undefined;
+  const done = typeof params.done === "string" ? DONE_MESSAGE[params.done] : undefined;
 
   const pending = await db.request.findMany({
     where: { status: "PENDING", deletedAt: null, ...mine },
@@ -66,10 +60,9 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
         description={isApprover ? "ใบเบิกที่ส่งมาให้คุณ — ใกล้ครบกำหนดอยู่บนสุด" : "ใบที่รออนุมัติทั้งหมด (ดูอย่างเดียว)"}
       />
 
-      {(done || fail > 0) && (
-        <div className="mb-4 flex flex-col gap-2">
-          {done && (params.n === undefined || n > 0) && <Alert tone="success">{done}</Alert>}
-          {fail > 0 && <Alert tone="warning">อีก {fail} ใบอนุมัติไม่ได้ (สถานะเปลี่ยนไปแล้ว) — ตรวจรายการอีกครั้ง</Alert>}
+      {done && (
+        <div className="mb-4">
+          <Alert tone="success">{done}</Alert>
         </div>
       )}
 
@@ -96,14 +89,12 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
       {tab === "pending" ? (
         <>
           {/* จอเล็ก (มือถือ): การ์ดทีละใบ กดอนุมัติได้เลย — จอใหญ่: ตาราง */}
-          {isApprover && pending.length > 1 && <BulkApprove formId={BULK_FORM} />}
           <PendingCards rows={pending} today={today} isApprover={isApprover} />
           <div className="hidden md:block">
             <TableCard>
               <table className={tableClass}>
                 <thead>
                   <tr>
-                    {isApprover && <th className={`${thClass} w-10`} />}
                     <th className={thClass}>{COLUMN.service}</th>
                     <th className={thClass}>{COLUMN.periodDue}</th>
                     <th className={`${thClass} text-right`}>{COLUMN.amount}</th>
@@ -117,11 +108,6 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                   {pending.map((r) => {
                     return (
                       <ClickableRow key={r.id} href={`/requests/${r.id}`}>
-                        {isApprover && (
-                          <td className={tdClass}>
-                            <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
-                          </td>
-                        )}
                         <td className={`${tdClass} whitespace-nowrap`}>
                           <ServiceCell center={r.center} href={`/requests/${r.id}`} />
                           {/* ดูไฟล์ได้ที่ปุ่ม "ดู" — แจ้งเฉพาะใบที่ไม่ได้แนบ (จุดที่ผู้อนุมัติควรสังเกต) */}
@@ -147,7 +133,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                     );
                   })}
                   {pending.length === 0 && (
-                    <EmptyRow colSpan={7} icon={Inbox}>
+                    <EmptyRow colSpan={isApprover ? 4 : 6} icon={Inbox}>
                       ไม่มีใบเบิกที่รออนุมัติ
                     </EmptyRow>
                   )}
@@ -181,14 +167,7 @@ function PendingCards({ rows, today, isApprover }: { rows: PendingRow[]; today: 
         return (
           <li key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                {isApprover && (
-                  <span className="pt-1">
-                    <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
-                  </span>
-                )}
-                <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
-              </div>
+              <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
               <div className="text-right">
                 <div className="text-lg font-bold tabular-nums text-slate-900">{formatAmount(r.amount)}</div>
                 <div className="text-xs text-slate-500">บาท</div>

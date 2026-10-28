@@ -251,12 +251,19 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
                 approverName={request.approverName}
                 canApprove={isMyApproval}
                 canDelete={can("DELETE")}
+                deleteNeedsNote={request.imported}
                 canRevert={can("REVERT")}
               />
               {!deleted && request.status === "PENDING" && !isMyApproval && (
                 <p className="text-sm text-slate-500">รอ {request.approverName} อนุมัติ</p>
               )}
-              {request.status === "PAID" && <p className="text-sm text-slate-500">ใบเบิกนี้จ่ายแล้ว ถูกล็อก แก้ไขไม่ได้</p>}
+              {!deleted && request.imported ? (
+                <p className="text-sm text-slate-500">
+                  ใบย้อนหลังที่นำเข้าจากตารางเดิม (จ่ายก่อนเริ่มใช้ระบบ) — แก้ไขไม่ได้{user.role === "ADMIN" ? " ถ้านำเข้าผิดให้ลบแล้วนำเข้าใหม่" : ""}
+                </p>
+              ) : (
+                request.status === "PAID" && <p className="text-sm text-slate-500">ใบเบิกนี้จ่ายแล้ว ถูกล็อก แก้ไขไม่ได้</p>
+              )}
               {othersDraft && (
                 <p className="text-xs text-slate-500">
                   ใบเบิกนี้เป็นของ {request.createdBy.name} — แก้ไข/ลบ/ส่งขออนุมัติได้เฉพาะผู้สร้างใบ ถ้า {request.createdBy.name} ไม่อยู่

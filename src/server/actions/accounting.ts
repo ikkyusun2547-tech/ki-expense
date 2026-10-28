@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 import type { FormState } from "@/lib/formState";
-import { checkPayment } from "@/lib/rules/paymentRules";
 import { todayISO } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { payRequest } from "@/server/services/requests";
@@ -27,26 +26,4 @@ export async function recordPayment(_prev: FormState, formData: FormData): Promi
     return { error: outcome.error, fieldErrors, values };
   }
   redirect(String(formData.get("returnTo") ?? "") === "detail" ? `/requests/${formData.get("id")}` : "/accounting?paid=1");
-}
-
-// บันทึกจ่ายทีละหลายใบด้วยวันที่จ่ายเดียวกัน (เช่น โอนรวมครั้งเดียว) — หน้าจอไม่มีช่องเลขอ้างอิงแล้ว
-// ตรวจวันที่ครั้งเดียวก่อน แล้วบันทึกทีละใบ (ใบที่สถานะเปลี่ยนไปแล้วข้ามไป แล้วแจ้งจำนวน)
-export async function payMany(_prev: FormState, formData: FormData): Promise<FormState> {
-  const actor = await requireRole("ACCOUNTING");
-
-  const ids = [...new Set(formData.getAll("ids").map(String))].filter(Boolean);
-  const values = { paidDate: String(formData.get("paidDate") ?? ""), paymentRef: String(formData.get("paymentRef") ?? "") };
-  if (ids.length === 0) return { error: "เลือกใบเบิกที่จะบันทึกการจ่ายก่อน", values };
-
-  const today = todayISO();
-  const check = checkPayment(values, today);
-  if (!check.ok) {
-    return { fieldErrors: Object.fromEntries(Object.entries(check.errors).map(([k, v]) => [k, [v]])), values };
-  }
-
-  let ok = 0;
-  for (const requestId of ids) {
-    if ((await payRequest({ requestId, input: values, today, actor })).ok) ok++;
-  }
-  redirect(`/accounting?paid=${ok}${ok < ids.length ? `&fail=${ids.length - ok}` : ""}`);
 }

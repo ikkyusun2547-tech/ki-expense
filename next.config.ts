@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   /* config options here */
   // ปุ่ม N ของ Next (เฉพาะตอนพัฒนา) ย้ายไปขวาล่าง ไม่ให้บังปุ่มออกจากระบบในแถบเมนูซ้าย
   devIndicators: { position: "bottom-right" },
+  // ให้เพื่อนร่วมงานในวงแลนทดลองใช้ dev server ผ่าน IP ของเครื่องนี้ได้ (ค่าเริ่มต้นอนุญาตเฉพาะ localhost)
+  // ใช้เฉพาะตอนพัฒนา — ระบบจริง (next start) ไม่ใช้ค่านี้
+  allowedDevOrigins: ["192.168.*.*"],
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {

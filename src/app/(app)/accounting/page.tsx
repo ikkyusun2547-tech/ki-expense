@@ -27,11 +27,7 @@ import { daysUntil } from "@/lib/rules/centerSummary";
 import { beYear, formatThaiDate, thaiMonthName, toISODate, todayISO } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
-import { BulkCheckbox } from "@/components/BulkBar";
-import { BulkPay } from "./BulkPay";
 import { PayForm } from "./PayForm";
-
-const BULK_FORM = "bulk-pay";
 
 const TABS = [
   { key: "pending", label: "รอจ่าย", icon: Clock, href: "/accounting" },
@@ -61,15 +57,9 @@ export default async function AccountingPage({ searchParams }: PageProps<"/accou
         description={user.role === "ACCOUNTING" ? "ใบเบิกที่อนุมัติแล้ว — ใกล้ครบกำหนดอยู่บนสุด" : "ใบที่อนุมัติแล้วรอจ่าย (ดูอย่างเดียว)"}
       />
 
-      {/* paid = จำนวนใบที่บันทึกสำเร็จ, fail = ใบที่บันทึกไม่ได้ (บันทึกทีละหลายใบ) */}
-      {(Number(params.paid) > 0 || Number(params.fail) > 0) && (
-        <div className="mb-4 flex flex-col gap-2">
-          {Number(params.paid) > 0 && (
-            <Alert tone="success">บันทึกการจ่ายแล้ว{Number(params.paid) > 1 ? ` ${params.paid} ใบ` : ""} ใบเบิกถูกล็อกเรียบร้อย</Alert>
-          )}
-          {Number(params.fail) > 0 && (
-            <Alert tone="warning">อีก {params.fail} ใบบันทึกไม่ได้ (สถานะเปลี่ยนไปแล้ว) — ตรวจรายการอีกครั้ง</Alert>
-          )}
+      {params.paid && (
+        <div className="mb-4">
+          <Alert tone="success">บันทึกการจ่ายแล้ว ใบเบิกถูกล็อกเรียบร้อย</Alert>
         </div>
       )}
 
@@ -123,8 +113,6 @@ type PendingRow = Awaited<
 function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: string; canPay: boolean }) {
   return (
     <>
-      {canPay && rows.length > 1 && <BulkPay formId={BULK_FORM} today={today} />}
-
       {/* จอเล็ก: การ์ดทีละใบ */}
       <ul className="flex flex-col gap-3 md:hidden">
         {rows.map((r) => {
@@ -132,14 +120,7 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
           return (
             <li key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  {canPay && (
-                    <span className="pt-1">
-                      <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
-                    </span>
-                  )}
-                  <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
-                </div>
+                <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
                 <div className="text-right">
                   <div className="text-lg font-bold tabular-nums text-slate-900">{formatAmount(r.amount)}</div>
                   <div className="text-xs text-slate-500">บาท</div>
@@ -176,7 +157,6 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
           <table className={tableClass}>
             <thead>
               <tr>
-                {canPay && <th className={`${thClassDense} w-10`} />}
                 <th className={thClassDense}>{COLUMN.service}</th>
                 <th className={thClassDense}>{COLUMN.invoice}</th>
                 <th className={thClassDense}>{COLUMN.periodDue}</th>
@@ -188,11 +168,6 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
               {rows.map((r) => {
                 return (
                   <ClickableRow key={r.id} href={`/requests/${r.id}`}>
-                    {canPay && (
-                      <td className={tdClassDense}>
-                        <BulkCheckbox formId={BULK_FORM} id={r.id} label={`เลือก ${r.center.name}`} />
-                      </td>
-                    )}
                     <td className={tdClassDense}>
                       <ServiceCell center={r.center} href={`/requests/${r.id}`} />
                     </td>
@@ -212,7 +187,7 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                 );
               })}
               {rows.length === 0 && (
-                <EmptyRow colSpan={6} icon={Inbox}>
+                <EmptyRow colSpan={5} icon={Inbox}>
                   ไม่มีใบเบิกที่รอจ่าย
                 </EmptyRow>
               )}
@@ -254,7 +229,7 @@ function recentMonths(today: string): string[] {
 
 async function PaidTable({ today }: { today: string }) {
   const requests = await db.request.findMany({
-    where: { status: "PAID", deletedAt: null },
+    where: { status: "PAID", deletedAt: null, imported: false }, // ใบย้อนหลังที่นำเข้าจากตารางเดิมไม่ได้จ่ายผ่านระบบ
     orderBy: [{ paidDate: "desc" }, { updatedAt: "desc" }],
     include: { center: { select: { kind: true, name: true, customerCode: true } } },
     take: 100,

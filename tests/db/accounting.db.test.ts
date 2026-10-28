@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { initialFormState } from "@/lib/formState";
 import { todayISO } from "@/lib/thai/date";
-import { payMany, recordPayment } from "@/server/actions/accounting";
+import { recordPayment } from "@/server/actions/accounting";
 import { db } from "@/server/db";
 import { getCenterSummaries } from "@/server/services/summary";
 import { form, run } from "./helpers";
@@ -132,36 +132,5 @@ describe("ตารางสรุปรายศูนย์ (อ่านจ�
 
   it("วันนี้ของระบบคิดตามเวลาไทย", () => {
     expect(todayISO(new Date("2026-10-21T17:30:00Z"))).toBe("2026-10-22");
-  });
-});
-
-describe("บันทึกจ่ายทีละหลายใบ", () => {
-  const payIds = (ids: string[], paidDate: string, paymentRef: string) => {
-    const fd = form({ paidDate, paymentRef });
-    for (const id of ids) fd.append("ids", id);
-    return run(() => payMany(initialFormState, fd));
-  };
-
-  it("วันที่ + เลขอ้างอิงเดียวกันทุกใบ; ใบที่จ่ายไปแล้วข้ามไปแล้วแจ้งจำนวน", async () => {
-    const [a, b, c] = [await approvedRequest((await center()).id), await approvedRequest((await center()).id), await approvedRequest((await center()).id)];
-    await loginAs("ACCOUNTING");
-    await pay(c, "2026-10-19", "PV-C"); // จ่ายไปก่อนแล้ว 1 ใบ
-
-    expect(await payIds([a, b, c, a], "2026-10-20", "PV-BULK")).toEqual({ redirect: "/accounting?paid=2&fail=1" });
-    for (const id of [a, b]) {
-      expect(await db.request.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "PAID", paymentRef: "PV-BULK" });
-    }
-    expect((await db.request.findUniqueOrThrow({ where: { id: c } })).paymentRef).toBe("PV-C");
-  });
-
-  it("ไม่เลือก / ไม่กรอกวันที่ → ไม่บันทึกอะไร; บทบาทอื่นเรียกไม่ได้", async () => {
-    const id = await approvedRequest((await center()).id);
-    await loginAs("ACCOUNTING");
-    expect(await payIds([], "2026-10-20", "PV")).toMatchObject({ result: { error: expect.stringContaining("เลือกใบเบิก") } });
-    expect(await payIds([id], "", "")).toMatchObject({ result: { fieldErrors: { paidDate: ["กรอกวันที่จ่าย"] } } });
-    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("APPROVED");
-
-    await loginAs("ADMIN");
-    expect(await payIds([id], "2026-10-20", "PV")).toEqual({ redirect: "/" });
   });
 });

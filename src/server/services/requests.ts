@@ -273,7 +273,7 @@ export async function transitionRequest(args: {
   }
 
   const note = args.note?.trim() || null;
-  const noteMessage = NOTE_REQUIRED[args.action];
+  const noteMessage = current.imported && args.action === "DELETE" ? "กรุณาระบุเหตุผลที่ลบใบย้อนหลัง" : NOTE_REQUIRED[args.action];
   if (noteMessage && !note) return { ok: false, error: noteMessage };
 
   // อนุมัติ → บันทึกเวลา (พิมพ์ในใบเบิก); กลับเป็นสร้างแล้ว → ล้างเวลาอนุมัติเดิม

@@ -158,23 +158,6 @@ export async function changeRequestStatus(_prev: FormState, formData: FormData):
   redirect(REDIRECT_AFTER[action] ?? `/requests/${requestId}`);
 }
 
-// ids ที่ติ๊กเลือกในหน้ารายการ (ตัดซ้ำ — จอเล็ก/ใหญ่มีช่องติ๊กคนละชุด)
-const selectedIds = (formData: FormData) => [...new Set(formData.getAll("ids").map(String))].filter(Boolean);
-
-// ผู้อนุมัติอนุมัติทีละหลายใบ — แต่ละใบตรวจสิทธิ์/สถานะแยกกันใน service (ใบที่ไม่ผ่านข้ามไป แล้วแจ้งจำนวน)
-export async function approveMany(_prev: FormState, formData: FormData): Promise<FormState> {
-  const actor = await requireRole("APPROVER");
-
-  const ids = selectedIds(formData);
-  if (ids.length === 0) return { error: "เลือกใบเบิกที่จะอนุมัติก่อน" };
-
-  let ok = 0;
-  for (const requestId of ids) {
-    if ((await transitionRequest({ requestId, action: "APPROVE", actor })).ok) ok++;
-  }
-  redirect(`/approvals?done=approve&n=${ok}${ok < ids.length ? `&fail=${ids.length - ok}` : ""}`);
-}
-
 // เลือกผู้ขออนุมัติ/ผู้อนุมัติที่จะพิมพ์ในใบเบิกนี้ — สิทธิ์ตามสถานะตรวจซ้ำใน service
 export async function changeRequestSigners(_prev: FormState, formData: FormData): Promise<FormState> {
   const actor = await requireRole("CREATOR", "ADMIN");

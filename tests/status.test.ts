@@ -87,6 +87,14 @@ describe("checkRequestAction", () => {
     expect(checkRequestAction({ id: "p", role: "APPROVER" }, "APPROVE", { ...draft, status: "PENDING" }).ok).toBe(true);
   });
 
+  it("ใบย้อนหลังที่นำเข้า (จ่ายแล้ว): admin ลบได้คนเดียว — แก้ไม่ได้, ใบจ่ายแล้วปกติลบไม่ได้", () => {
+    const imported = { status: "PAID" as const, createdById: "admin1", imported: true };
+    expect(checkRequestAction({ id: "admin2", role: "ADMIN" }, "DELETE", imported)).toEqual({ ok: true, to: "PAID" });
+    expect(checkRequestAction({ id: "admin1", role: "CREATOR" }, "DELETE", imported)).toMatchObject({ ok: false, reason: expect.stringContaining("เฉพาะผู้ดูแลระบบ") });
+    expect(checkRequestAction({ id: "a", role: "ADMIN" }, "EDIT", imported).ok).toBe(false);
+    expect(checkRequestAction({ id: "a", role: "ADMIN" }, "DELETE", { ...imported, imported: false }).ok).toBe(false);
+  });
+
   it("เจ้าของก็ยังติดกฎสถานะ", () => {
     expect(checkRequestAction(owner, "EDIT", { ...draft, status: "PENDING" })).toEqual({
       ok: false,

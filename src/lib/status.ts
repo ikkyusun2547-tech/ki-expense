@@ -126,11 +126,17 @@ export function canPerform(role: Role, action: RequestAction, status: RequestSta
 export const NOT_OWNER_REASON = "ใบเบิกนี้เป็นของผู้จัดทำคนอื่น แก้ไข/ลบ/ส่งได้เฉพาะผู้สร้างใบ (ถ้าผู้สร้างไม่อยู่ ให้ผู้ดูแลระบบโอนใบให้)";
 
 // checkTransition + เจ้าของใบ — ใช้กับใบเบิกจริง (service บังคับ, หน้าจอซ่อนปุ่ม)
+export const IMPORTED_DELETE_REASON = "ใบย้อนหลังที่นำเข้าจากตารางเดิม ลบได้เฉพาะผู้ดูแลระบบ";
+
+// imported = ใบย้อนหลังที่นำเข้าจากตารางเดิม (จ่ายแล้ว): ล็อกเหมือนใบจ่ายแล้ว ยกเว้น admin ลบได้ (เมื่อนำเข้าผิด แล้วนำเข้าใหม่)
 export function checkRequestAction(
   actor: { id: string; role: Role },
   action: RequestAction,
-  request: { status: RequestStatus; createdById: string },
+  request: { status: RequestStatus; createdById: string; imported?: boolean },
 ): TransitionCheck {
+  if (action === "DELETE" && request.imported) {
+    return actor.role === "ADMIN" ? { ok: true, to: request.status } : { ok: false, reason: IMPORTED_DELETE_REASON };
+  }
   const result = checkTransition(actor.role, action, request.status);
   if (result.ok && OWNER_ACTIONS.includes(action) && request.createdById !== actor.id) return { ok: false, reason: NOT_OWNER_REASON };
   return result;

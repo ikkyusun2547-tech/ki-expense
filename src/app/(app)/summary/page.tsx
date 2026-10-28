@@ -1,5 +1,5 @@
 import { ClickableRow } from "@/components/ClickableRow";
-import { CalendarClock, CircleCheck, Clock, Eye, Inbox, LayoutDashboard, Plus, TriangleAlert } from "lucide-react";
+import { CalendarClock, CircleCheck, Clock, Download, Eye, Inbox, LayoutDashboard, Plus, TriangleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
@@ -7,8 +7,10 @@ import { RequestStatusBadge } from "@/components/StatusBadge";
 import {
   Alert,
   Badge,
+  Button,
   ButtonLink,
   EmptyRow,
+  FilterSelect,
   NameCell,
   PageHeader,
   rowClass,
@@ -68,6 +70,15 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
   const rows = all.filter((r) => r.center.kind === kind);
   const noun = KIND_TAB[kind].noun;
   const href = (state?: CenterSummaryState) => `${kindHref("/summary", kind)}${state ? `&state=${state}` : ""}`;
+  // ปีที่ดาวน์โหลดตารางรายปีได้: ตั้งแต่ปีของใบเบิกแรกจนถึงปีนี้ (ใหม่สุดก่อน)
+  const firstDue = await db.request.findFirst({
+    where: { deletedAt: null, center: { kind } },
+    orderBy: { dueDate: "asc" },
+    select: { dueDate: true },
+  });
+  const thisYear = Number(today.slice(0, 4));
+  const fromYear = Math.min(thisYear, firstDue?.dueDate.getUTCFullYear() ?? thisYear);
+  const years = Array.from({ length: thisYear - fromYear + 1 }, (_, i) => thisYear - i);
   const drafts = isCreator ? await db.request.count({ where: { status: "CREATED", deletedAt: null, createdById: user.id, center: { kind } } }) : 0;
   const shown = filter ? rows.filter((r) => r.state === filter) : rows;
   const countOf = (s: CenterSummaryState) => rows.filter((r) => r.state === s).length;
@@ -116,14 +127,27 @@ export default async function SummaryPage({ searchParams }: PageProps<"/summary"
         ))}
       </div>
 
-      {filter && (
-        <div className="mb-3 flex items-center gap-2 text-sm text-slate-500">
-          แสดงเฉพาะ <Badge tone={STATE[filter].tone}>{STATE[filter].label}</Badge>
-          <Link href={href()} className="font-medium text-brand-700 hover:underline">
-            แสดงทั้งหมด
-          </Link>
-        </div>
-      )}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        {filter ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            แสดงเฉพาะ <Badge tone={STATE[filter].tone}>{STATE[filter].label}</Badge>
+            <Link href={href()} className="font-medium text-brand-700 hover:underline">
+              แสดงทั้งหมด
+            </Link>
+          </div>
+        ) : (
+          <span />
+        )}
+        {/* ตารางรายปีแบบที่เคยเขียนมือ (Excel) — ฟอร์ม GET ธรรมดา ไฟล์ดาวน์โหลดโดยไม่เปลี่ยนหน้า */}
+        <form method="get" action="/api/reports/yearly" className="flex flex-wrap items-center gap-2">
+          <input type="hidden" name="kind" value={kind} />
+          <span className="text-sm text-slate-600">ตารางรายปี (Excel):</span>
+          <FilterSelect name="year" label="ปี" defaultValue={String(thisYear)} options={years.map((y) => ({ value: String(y), label: `ปี ${y + 543}` }))} />
+          <Button type="submit" variant="secondary" icon={Download}>
+            ดาวน์โหลด
+          </Button>
+        </form>
+      </div>
 
       {/* จอเล็ก: การ์ดทีละศูนย์/เบอร์ (ปุ่มสร้าง/ดูใบเบิกเห็นทันที) — จอใหญ่: ตาราง */}
       <ul className="flex flex-col gap-3 md:hidden">

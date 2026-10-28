@@ -143,6 +143,9 @@ model Request {
   recipient       String // เรียน
   purpose         String // เพื่อ
   createdById     String
+  // ใบย้อนหลังที่ admin นำเข้าจากตารางเดิม (จ่ายนอกระบบก่อนเริ่มใช้): สถานะจ่ายแล้ว, วันที่จ่าย = กำหนดชำระ
+  // ไม่นับในรายการ/รายงานการจ่ายของฝ่ายบัญชี แต่นับในสรุปรายศูนย์ ตารางรายปี และกฎกันเบิกซ้ำ
+  imported        Boolean       @default(false)
   deletedAt       DateTime? // soft delete: ลบได้เฉพาะสถานะ CREATED
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
