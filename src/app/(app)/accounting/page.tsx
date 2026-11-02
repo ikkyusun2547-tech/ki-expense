@@ -1,5 +1,5 @@
 import { Banknote, Calculator, CircleCheck, Clock, Download, Eye, Inbox, Paperclip, TriangleAlert, Wallet } from "lucide-react";
-import Link from "next/link";
+import type { RequestStatus } from "@/generated/prisma/enums";
 import { DueBadge } from "@/components/DueBadge";
 import { PhoneChargesNote } from "@/components/PhoneCharges";
 import { ClickableRow } from "@/components/ClickableRow";
@@ -7,11 +7,11 @@ import { AmountCell, COLUMN, InvoiceCell, PeriodDueCell, ServiceCell, TwoLine } 
 import {
   Alert,
   Button,
-  cx,
   EmptyRow,
   FilterSelect,
   NameCell,
   PageHeader,
+  PillTabs,
   RowLink,
   StatCard,
   TableCard,
@@ -24,49 +24,63 @@ import {
 import { centerLabel, kindTag } from "@/lib/centers/phone";
 import { formatAmount, toSatang } from "@/lib/money";
 import { daysUntil } from "@/lib/rules/centerSummary";
-import { beYear, formatThaiDate, thaiMonthName, toISODate, todayISO } from "@/lib/thai/date";
+import { beYear, formatThaiDate, formatThaiDateTime, thaiHour, thaiMonthName, toISODate, todayISO } from "@/lib/thai/date";
+import { greeting } from "@/lib/thai/name";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
 import { PayForm } from "./PayForm";
+import { ReceiveButton } from "./ReceiveButton";
 
+// ใบเบิกเป็นกระดาษ: อนุมัติแล้ว → บัญชีกด "รับเอกสาร" เมื่อกระดาษมาถึง → บันทึกจ่าย
 const TABS = [
-  { key: "pending", label: "รอจ่าย", icon: Clock, href: "/accounting" },
+  { key: "receive", label: "รอรับเอกสาร", icon: Inbox, href: "/accounting" },
+  { key: "pay", label: "รอจ่าย", icon: Clock, href: "/accounting?tab=pay" },
   { key: "paid", label: "จ่ายแล้ว", icon: CircleCheck, href: "/accounting?tab=paid" },
 ] as const;
+
+type QueueTab = "receive" | "pay";
+const QUEUE_STATUS: Record<QueueTab, RequestStatus> = { receive: "APPROVED", pay: "RECEIVED" };
+const QUEUE_EMPTY: Record<QueueTab, string> = { receive: "ไม่มีใบเบิกที่รอรับเอกสาร", pay: "ไม่มีใบเบิกที่รอจ่าย" };
 
 export default async function AccountingPage({ searchParams }: PageProps<"/accounting">) {
   const user = await requireRole("ACCOUNTING", "ADMIN");
   const today = todayISO();
 
   const params = await searchParams;
-  const tab = params.tab === "paid" ? "paid" : "pending";
+  const tab = TABS.find((t) => t.key === params.tab)?.key ?? "receive";
+  const canAct = user.role === "ACCOUNTING";
 
-  const pending = await db.request.findMany({
-    where: { status: "APPROVED", deletedAt: null },
+  // ใบที่ยังไม่จ่ายทั้งหมด (รอรับเอกสาร + รอจ่าย) — ใกล้ครบกำหนดอยู่บนสุด
+  const open = await db.request.findMany({
+    where: { status: { in: ["APPROVED", "RECEIVED"] }, deletedAt: null },
     orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
     include: { center: { select: { kind: true, name: true, customerCode: true } } },
   });
-  const totalSatang = pending.reduce((sum, r) => sum + toSatang(r.amount), BigInt(0));
-  const overdue = pending.filter((r) => daysUntil(today, toISODate(r.dueDate)) < 0).length;
+  const queue = (t: QueueTab) => open.filter((r) => r.status === QUEUE_STATUS[t]);
+  const counts: Record<string, number> = { receive: queue("receive").length, pay: queue("pay").length };
+  const totalSatang = open.reduce((sum, r) => sum + toSatang(r.amount), BigInt(0));
+  const overdue = open.filter((r) => daysUntil(today, toISODate(r.dueDate)) < 0).length;
 
   return (
     <>
       <PageHeader
         icon={Calculator}
+        greeting={greeting(user.name, thaiHour())}
         title="ฝ่ายบัญชี"
-        description={user.role === "ACCOUNTING" ? "ใบเบิกที่อนุมัติแล้ว — ใกล้ครบกำหนดอยู่บนสุด" : "ใบที่อนุมัติแล้วรอจ่าย (ดูอย่างเดียว)"}
+        description={canAct ? "ได้รับใบเบิกกระดาษแล้วกด “รับเอกสาร” จากนั้นบันทึกจ่าย — ใกล้ครบกำหนดอยู่บนสุด" : "ใบที่อนุมัติแล้ว รอรับเอกสาร/รอจ่าย (ดูอย่างเดียว)"}
       />
 
-      {params.paid && (
+      {(params.paid || params.received) && (
         <div className="mb-4">
-          <Alert tone="success">บันทึกการจ่ายแล้ว ใบเบิกถูกล็อกเรียบร้อย</Alert>
+          <Alert tone="success">{params.paid ? "บันทึกการจ่ายแล้ว ใบเบิกถูกล็อกเรียบร้อย" : "รับเอกสารแล้ว — ใบเบิกย้ายไปแท็บ “รอจ่าย”"}</Alert>
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-3 gap-3 sm:gap-4">
-        <StatCard label="รอจ่าย" value={pending.length} sub="ใบเบิก" icon={Wallet} tone="sky" />
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatCard label="รอรับเอกสาร" value={counts.receive} sub="อนุมัติแล้ว กระดาษยังไม่ถึง" icon={Inbox} tone="sky" href="/accounting" active={tab === "receive"} />
+        <StatCard label="รอจ่าย" value={counts.pay} sub="รับเอกสารแล้ว" icon={Wallet} tone="violet" href="/accounting?tab=pay" active={tab === "pay"} />
         <StatCard
-          label="ยอดรวมที่รอจ่าย"
+          label="ยอดรวมที่ยังไม่จ่าย"
           value={formatAmount(`${totalSatang / BigInt(100)}.${String(totalSatang % BigInt(100)).padStart(2, "0")}`)}
           sub="บาท"
           icon={Banknote}
@@ -81,27 +95,12 @@ export default async function AccountingPage({ searchParams }: PageProps<"/accou
         />
       </div>
 
-      <nav className="mb-4 inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-sm">
-        {TABS.map((t) => (
-          <Link
-            key={t.key}
-            href={t.href}
-            aria-current={tab === t.key ? "page" : undefined}
-            className={cx(
-              "flex items-center gap-1.5 rounded-md px-4 py-1.5",
-              tab === t.key ? "bg-brand-700 font-medium text-white shadow-sm" : "text-slate-600 hover:bg-slate-100",
-            )}
-          >
-            <t.icon className="size-4" aria-hidden />
-            {t.label}
-            {t.key === "pending" && pending.length > 0 && (
-              <span className={cx("rounded-full px-1.5 text-xs", tab === t.key ? "bg-white/20" : "bg-slate-100")}>{pending.length}</span>
-            )}
-          </Link>
-        ))}
-      </nav>
+      <PillTabs
+        label="มุมมอง"
+        tabs={TABS.map((t) => ({ href: t.href, label: t.label, icon: t.icon, count: counts[t.key], active: tab === t.key }))}
+      />
 
-      {tab === "pending" ? <PendingTable rows={pending} today={today} canPay={user.role === "ACCOUNTING"} /> : <PaidTable today={today} />}
+      {tab === "paid" ? <PaidTable today={today} /> : <QueueTable tab={tab} rows={queue(tab)} today={today} canAct={canAct} />}
     </>
   );
 }
@@ -110,7 +109,11 @@ type PendingRow = Awaited<
   ReturnType<typeof db.request.findMany<{ include: { center: { select: { kind: true; name: true; customerCode: true } } } }>>
 >[number];
 
-function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: string; canPay: boolean }) {
+// รอรับเอกสาร: ผู้อนุมัติ/เวลาอนุมัติ + ปุ่มรับเอกสาร / รอจ่าย: เวลารับเอกสาร + วันที่จ่าย + ปุ่มบันทึกจ่าย
+function QueueTable({ tab, rows, today, canAct }: { tab: QueueTab; rows: PendingRow[]; today: string; canAct: boolean }) {
+  const receive = tab === "receive";
+  const action = (r: PendingRow, suffix?: string) =>
+    receive ? <ReceiveButton id={r.id} returnTo="list" /> : <PayForm id={r.id} today={today} returnTo="list" suffix={suffix} compact />;
   return (
     <>
       {/* จอเล็ก: การ์ดทีละใบ */}
@@ -118,7 +121,7 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
         {rows.map((r) => {
           const due = toISODate(r.dueDate);
           return (
-            <li key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <li key={r.id} className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
                 <div className="text-right">
@@ -136,18 +139,15 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                 </span>
                 <RowLink href={`/requests/${r.id}`} icon={Eye}>ดู</RowLink>
               </div>
-              {canPay && (
-                <div className="mt-3 border-t border-slate-100 pt-3">
-                  <PayAction row={r} today={today} suffix="-m" />
-                </div>
-              )}
+              <div className="mt-1 text-xs text-slate-500">
+                <Progress row={r} />
+              </div>
+              {canAct && <div className="mt-3 border-t border-slate-100 pt-3">{action(r, "-m")}</div>}
             </li>
           );
         })}
         {rows.length === 0 && (
-          <li className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500">
-            ไม่มีใบเบิกที่รอจ่าย
-          </li>
+          <li className="rounded-2xl border border-slate-200/70 bg-white px-4 py-12 text-center text-sm text-slate-500">{QUEUE_EMPTY[tab]}</li>
         )}
       </ul>
 
@@ -161,7 +161,8 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                 <th className={thClassDense}>{COLUMN.invoice}</th>
                 <th className={thClassDense}>{COLUMN.periodDue}</th>
                 <th className={`${thClassDense} text-right`}>{COLUMN.amount}</th>
-                <th className={thClassDense}>{canPay ? "บันทึกการจ่าย" : ""}</th>
+                <th className={thClassDense}>{receive ? "อนุมัติโดย" : "บัญชีรับแล้ว"}</th>
+                {canAct && <th className={thClassDense}>{receive ? "รับเอกสาร" : "บันทึกการจ่าย"}</th>}
               </tr>
             </thead>
             <tbody>
@@ -181,14 +182,15 @@ function PendingTable({ rows, today, canPay }: { rows: PendingRow[]; today: stri
                       <AmountCell request={r} />
                     </td>
                     <td className={tdClassDense}>
-                      {canPay ? <PayAction row={r} today={today} /> : <span className="text-slate-300">–</span>}
+                      <Progress row={r} twoLine />
                     </td>
+                    {canAct && <td className={tdClassDense}>{action(r)}</td>}
                   </ClickableRow>
                 );
               })}
               {rows.length === 0 && (
-                <EmptyRow colSpan={5} icon={Inbox}>
-                  ไม่มีใบเบิกที่รอจ่าย
+                <EmptyRow colSpan={canAct ? 6 : 5} icon={Inbox}>
+                  {QUEUE_EMPTY[tab]}
                 </EmptyRow>
               )}
             </tbody>
@@ -213,9 +215,19 @@ function FileLink({ row }: { row: PendingRow }) {
   );
 }
 
-// บันทึกการจ่ายทีละใบในแถวเลย: วันที่จ่าย (ค่าเริ่มต้นวันนี้) + ปุ่มบันทึก
-function PayAction({ row, today, suffix }: { row: PendingRow; today: string; suffix?: string }) {
-  return <PayForm id={row.id} today={today} returnTo="list" suffix={suffix} compact />;
+// ความคืบหน้าของเอกสาร: รอรับ = ใครอนุมัติ/เมื่อไร (ไว้ตามกระดาษ), รอจ่าย = รับเอกสารเมื่อไร
+function Progress({ row, twoLine = false }: { row: PendingRow; twoLine?: boolean }) {
+  const approved = row.status === "APPROVED";
+  const at = approved ? row.approvedAt : row.receivedAt;
+  const main = approved ? (row.approverName ?? "–") : "รับเอกสารแล้ว";
+  const sub = at && `${formatThaiDateTime(at)} น.`;
+  if (twoLine) return <TwoLine main={main} sub={sub} />;
+  return (
+    <>
+      {approved ? `อนุมัติโดย ${main}` : main}
+      {sub && ` · ${sub}`}
+    </>
+  );
 }
 
 // 12 เดือนล่าสุด (นับจากเดือนนี้) สำหรับเลือกเดือนที่จะดาวน์โหลด — "YYYY-MM"
@@ -229,7 +241,7 @@ function recentMonths(today: string): string[] {
 
 async function PaidTable({ today }: { today: string }) {
   const requests = await db.request.findMany({
-    where: { status: "PAID", deletedAt: null, imported: false }, // ใบย้อนหลังที่นำเข้าจากตารางเดิมไม่ได้จ่ายผ่านระบบ
+    where: { status: "PAID", deletedAt: null },
     orderBy: [{ paidDate: "desc" }, { updatedAt: "desc" }],
     include: { center: { select: { kind: true, name: true, customerCode: true } } },
     take: 100,

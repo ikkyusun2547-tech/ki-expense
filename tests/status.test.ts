@@ -6,6 +6,7 @@ import {
   checkRequestAction,
   checkSignerChange,
   checkTransition,
+  documentLocation,
   isAssignedApprover,
   isSignerRole,
   returnedBy,
@@ -13,23 +14,27 @@ import {
 } from "@/lib/status";
 
 const ROLES: Role[] = ["CREATOR", "ACCOUNTING", "APPROVER", "ADMIN"];
-const STATUSES: RequestStatus[] = ["CREATED", "PENDING", "APPROVED", "PAID"];
-const ACTIONS: RequestAction[] = ["EDIT", "DELETE", "SUBMIT", "APPROVE", "REJECT", "PAY", "REVERT", "TRANSFER"];
+const STATUSES: RequestStatus[] = ["CREATED", "PENDING", "APPROVED", "RECEIVED", "PAID"];
+const ACTIONS: RequestAction[] = ["EDIT", "DELETE", "SUBMIT", "APPROVE", "REJECT", "RECEIVE", "PAY", "REVERT", "TRANSFER"];
 
 // ตารางสิทธิ์ที่ตกลงกัน: [บทบาท, การกระทำ, สถานะปัจจุบัน] → สถานะใหม่
-// (อนุมัติในระบบ 2026-10-24: อนุมัติแล้วเข้าคิวบัญชีทันที, ผู้อนุมัติไม่อนุมัติ → กลับเป็นสร้างแล้ว)
+// (อนุมัติในระบบ 2026-10-24: ผู้อนุมัติไม่อนุมัติ → กลับเป็นสร้างแล้ว;
+//  2026-10-31: ใบเบิกเป็นกระดาษ — บัญชีกดรับเอกสารก่อน แล้วจึงบันทึกจ่ายได้)
 const ALLOWED: [Role, RequestAction, RequestStatus, RequestStatus][] = [
   ["CREATOR", "EDIT", "CREATED", "CREATED"],
   ["CREATOR", "DELETE", "CREATED", "CREATED"],
   ["CREATOR", "SUBMIT", "CREATED", "PENDING"],
   ["APPROVER", "APPROVE", "PENDING", "APPROVED"],
   ["APPROVER", "REJECT", "PENDING", "CREATED"],
-  ["ACCOUNTING", "PAY", "APPROVED", "PAID"],
+  ["ACCOUNTING", "RECEIVE", "APPROVED", "RECEIVED"],
+  ["ACCOUNTING", "PAY", "RECEIVED", "PAID"],
   ["ADMIN", "REVERT", "PENDING", "CREATED"],
   ["ADMIN", "REVERT", "APPROVED", "CREATED"],
+  ["ADMIN", "REVERT", "RECEIVED", "CREATED"],
   ["ADMIN", "TRANSFER", "CREATED", "CREATED"],
   ["ADMIN", "TRANSFER", "PENDING", "PENDING"],
   ["ADMIN", "TRANSFER", "APPROVED", "APPROVED"],
+  ["ADMIN", "TRANSFER", "RECEIVED", "RECEIVED"],
 ];
 
 describe("checkTransition", () => {
@@ -55,7 +60,7 @@ describe("checkTransition", () => {
   });
 
   it("ผู้จัดทำบันทึกการจ่ายไม่ได้", () => {
-    const result = checkTransition("CREATOR", "PAY", "APPROVED");
+    const result = checkTransition("CREATOR", "PAY", "RECEIVED");
     expect(result).toEqual({ ok: false, reason: "ผู้จัดทำไม่มีสิทธิ์บันทึกการจ่าย" });
   });
 
@@ -67,6 +72,22 @@ describe("checkTransition", () => {
   it("admin อนุมัติแทนไม่ได้, ฝ่ายบัญชีจ่ายใบที่ยังไม่อนุมัติไม่ได้", () => {
     expect(canPerform("ADMIN", "APPROVE", "PENDING")).toBe(false);
     expect(canPerform("ACCOUNTING", "PAY", "PENDING")).toBe(false);
+  });
+
+  it("ฝ่ายบัญชีจ่ายใบที่ยังไม่รับเอกสารไม่ได้", () => {
+    expect(checkTransition("ACCOUNTING", "PAY", "APPROVED")).toEqual({ ok: false, reason: 'ใบเบิกสถานะ "อนุมัติแล้ว" บันทึกการจ่ายไม่ได้' });
+    expect(checkTransition("ADMIN", "RECEIVE", "APPROVED")).toEqual({ ok: false, reason: "ผู้ดูแลระบบไม่มีสิทธิ์รับเอกสาร" });
+  });
+});
+
+describe("documentLocation", () => {
+  const base = { approverName: "ผู้อนุมัติ ก", createdBy: { name: "ผู้จัดทำ ข" } };
+  it("บอกว่าเอกสารอยู่ที่ใครตามสถานะ", () => {
+    expect(documentLocation({ ...base, status: "CREATED" })).toBe("ผู้จัดทำ (ผู้จัดทำ ข)");
+    expect(documentLocation({ ...base, status: "PENDING" })).toBe("ผู้อนุมัติ (ผู้อนุมัติ ก)");
+    expect(documentLocation({ ...base, status: "APPROVED" })).toBe("กำลังส่งไปฝ่ายบัญชี (บัญชียังไม่กดรับ)");
+    expect(documentLocation({ ...base, status: "RECEIVED" })).toBe("ฝ่ายบัญชี (รอจ่าย)");
+    expect(documentLocation({ ...base, status: "PAID" })).toBe("ฝ่ายบัญชี (จ่ายแล้ว)");
   });
 });
 
@@ -85,14 +106,6 @@ describe("checkRequestAction", () => {
     expect(checkRequestAction({ id: "a", role: "ADMIN" }, "TRANSFER", draft).ok).toBe(true);
     expect(checkRequestAction({ id: "a", role: "ADMIN" }, "REVERT", { ...draft, status: "PENDING" }).ok).toBe(true);
     expect(checkRequestAction({ id: "p", role: "APPROVER" }, "APPROVE", { ...draft, status: "PENDING" }).ok).toBe(true);
-  });
-
-  it("ใบย้อนหลังที่นำเข้า (จ่ายแล้ว): admin ลบได้คนเดียว — แก้ไม่ได้, ใบจ่ายแล้วปกติลบไม่ได้", () => {
-    const imported = { status: "PAID" as const, createdById: "admin1", imported: true };
-    expect(checkRequestAction({ id: "admin2", role: "ADMIN" }, "DELETE", imported)).toEqual({ ok: true, to: "PAID" });
-    expect(checkRequestAction({ id: "admin1", role: "CREATOR" }, "DELETE", imported)).toMatchObject({ ok: false, reason: expect.stringContaining("เฉพาะผู้ดูแลระบบ") });
-    expect(checkRequestAction({ id: "a", role: "ADMIN" }, "EDIT", imported).ok).toBe(false);
-    expect(checkRequestAction({ id: "a", role: "ADMIN" }, "DELETE", { ...imported, imported: false }).ok).toBe(false);
   });
 
   it("เจ้าของก็ยังติดกฎสถานะ", () => {

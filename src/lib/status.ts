@@ -2,10 +2,12 @@ import type { CenterStatus, LogAction, RequestStatus, Role, ServiceKind } from "
 
 // state machine ของใบเบิก + สิทธิ์ตามบทบาท — ใช้ทั้งฝั่งเซิร์ฟเวอร์ (บังคับ) และหน้าจอ (ซ่อนปุ่ม)
 //
-//   CREATE → CREATED ──SUBMIT──▶ PENDING ──APPROVE──▶ APPROVED ──PAY──▶ PAID (ล็อก)
-//            ▲  EDIT/DELETE         │                    │
-//            ├───────REJECT─────────┘ (ผู้อนุมัติ)          │
-//            └───────REVERT─────────┴────────────────────┘ (admin)
+//   CREATE → CREATED ──SUBMIT──▶ PENDING ──APPROVE──▶ APPROVED ──RECEIVE──▶ RECEIVED ──PAY──▶ PAID (ล็อก)
+//            ▲  EDIT/DELETE         │                    │                      │
+//            ├───────REJECT─────────┘ (ผู้อนุมัติ)          │                      │
+//            └───────REVERT─────────┴────────────────────┴──────────────────────┘ (admin)
+//
+// ใบเบิกยังเป็นกระดาษเซ็นมือ — สถานะ = เอกสารอยู่ที่ใคร (documentLocation): ผู้จัดทำ → ผู้อนุมัติ → ส่งไปบัญชี → บัญชีรับแล้ว → จ่ายแล้ว
 //
 // APPROVE/REJECT ต้องเป็นผู้อนุมัติที่เลือกไว้ในใบนั้นเท่านั้น (ตรวจใน service ด้วย isAssignedApprover)
 // EDIT/DELETE/SUBMIT เฉพาะผู้จัดทำที่สร้างใบ (OWNER_ACTIONS) — admin โอนใบให้คนอื่นได้ (TRANSFER) เมื่อเจ้าของไม่อยู่
@@ -25,9 +27,10 @@ export const ACTION_RULES: Record<RequestAction, ActionRule> = {
   SUBMIT: { roles: ["CREATOR"], from: ["CREATED"], to: "PENDING" },
   APPROVE: { roles: ["APPROVER"], from: ["PENDING"], to: "APPROVED" },
   REJECT: { roles: ["APPROVER"], from: ["PENDING"], to: "CREATED" },
-  PAY: { roles: ["ACCOUNTING"], from: ["APPROVED"], to: "PAID" },
-  REVERT: { roles: ["ADMIN"], from: ["PENDING", "APPROVED"], to: "CREATED" },
-  TRANSFER: { roles: ["ADMIN"], from: ["CREATED", "PENDING", "APPROVED"] }, // จ่ายแล้ว = ล็อก ไม่ต้องมีเจ้าของดูแลต่อ
+  RECEIVE: { roles: ["ACCOUNTING"], from: ["APPROVED"], to: "RECEIVED" }, // ฝ่ายบัญชีได้รับกระดาษแล้ว
+  PAY: { roles: ["ACCOUNTING"], from: ["RECEIVED"], to: "PAID" }, // จ่ายได้เมื่อรับเอกสารแล้วเท่านั้น
+  REVERT: { roles: ["ADMIN"], from: ["PENDING", "APPROVED", "RECEIVED"], to: "CREATED" },
+  TRANSFER: { roles: ["ADMIN"], from: ["CREATED", "PENDING", "APPROVED", "RECEIVED"] }, // จ่ายแล้ว = ล็อก ไม่ต้องมีเจ้าของดูแลต่อ
 };
 
 // ทำได้เฉพาะผู้จัดทำที่สร้างใบ (ผู้ใช้เลือก 2026-10-27 — จะมีผู้จัดทำหลายคน)
@@ -37,6 +40,7 @@ export const STATUS_LABEL: Record<RequestStatus, string> = {
   CREATED: "สร้างแล้ว",
   PENDING: "รออนุมัติ",
   APPROVED: "อนุมัติแล้ว",
+  RECEIVED: "บัญชีรับแล้ว",
   PAID: "จ่ายแล้ว",
 };
 
@@ -75,6 +79,7 @@ export const ACTION_LABEL: Record<LogAction, string> = {
   SEND: "ส่งบัญชีแล้ว",
   SUBMIT: "ส่งขออนุมัติ",
   APPROVE: "อนุมัติ",
+  RECEIVE: "รับเอกสาร",
   REJECT: "ไม่อนุมัติ",
   PAY: "บันทึกการจ่าย",
   REVERT: "ย้อนสถานะ",
@@ -126,17 +131,11 @@ export function canPerform(role: Role, action: RequestAction, status: RequestSta
 export const NOT_OWNER_REASON = "ใบเบิกนี้เป็นของผู้จัดทำคนอื่น แก้ไข/ลบ/ส่งได้เฉพาะผู้สร้างใบ (ถ้าผู้สร้างไม่อยู่ ให้ผู้ดูแลระบบโอนใบให้)";
 
 // checkTransition + เจ้าของใบ — ใช้กับใบเบิกจริง (service บังคับ, หน้าจอซ่อนปุ่ม)
-export const IMPORTED_DELETE_REASON = "ใบย้อนหลังที่นำเข้าจากตารางเดิม ลบได้เฉพาะผู้ดูแลระบบ";
-
-// imported = ใบย้อนหลังที่นำเข้าจากตารางเดิม (จ่ายแล้ว): ล็อกเหมือนใบจ่ายแล้ว ยกเว้น admin ลบได้ (เมื่อนำเข้าผิด แล้วนำเข้าใหม่)
 export function checkRequestAction(
   actor: { id: string; role: Role },
   action: RequestAction,
-  request: { status: RequestStatus; createdById: string; imported?: boolean },
+  request: { status: RequestStatus; createdById: string },
 ): TransitionCheck {
-  if (action === "DELETE" && request.imported) {
-    return actor.role === "ADMIN" ? { ok: true, to: request.status } : { ok: false, reason: IMPORTED_DELETE_REASON };
-  }
   const result = checkTransition(actor.role, action, request.status);
   if (result.ok && OWNER_ACTIONS.includes(action) && request.createdById !== actor.id) return { ok: false, reason: NOT_OWNER_REASON };
   return result;
@@ -150,6 +149,22 @@ export function returnedBy<T extends { action: LogAction }>(status: RequestStatu
   if (status !== "CREATED") return null;
   const last = logs.filter((l) => ROUTE_ACTIONS.includes(l.action)).at(-1);
   return last && (last.action === "REJECT" || last.action === "REVERT") ? last : null;
+}
+
+// เอกสาร (กระดาษ) อยู่ที่ใคร — แสดงในหน้าใบเบิกให้ผู้จัดทำไม่ต้องโทรถาม
+export function documentLocation(request: { status: RequestStatus; approverName: string | null; createdBy: { name: string } }): string {
+  switch (request.status) {
+    case "CREATED":
+      return `ผู้จัดทำ (${request.createdBy.name})`;
+    case "PENDING":
+      return `ผู้อนุมัติ (${request.approverName ?? "ยังไม่เลือก"})`;
+    case "APPROVED":
+      return "กำลังส่งไปฝ่ายบัญชี (บัญชียังไม่กดรับ)";
+    case "RECEIVED":
+      return "ฝ่ายบัญชี (รอจ่าย)";
+    case "PAID":
+      return "ฝ่ายบัญชี (จ่ายแล้ว)";
+  }
 }
 
 // อนุมัติ/ไม่อนุมัติได้เฉพาะผู้อนุมัติที่ผู้จัดทำเลือกไว้ในใบ

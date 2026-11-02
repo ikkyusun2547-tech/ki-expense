@@ -1,15 +1,15 @@
 import { CircleCheck, Clock, Eye, Inbox, Paperclip, Stamp } from "lucide-react";
-import Link from "next/link";
 import { DueBadge } from "@/components/DueBadge";
 import { RequestStatusBadge } from "@/components/StatusBadge";
 import { PhoneChargesNote } from "@/components/PhoneCharges";
 import { ClickableRow } from "@/components/ClickableRow";
 import { AmountCell, COLUMN, PeriodDueCell, ServiceCell } from "@/components/RequestCells";
-import { Alert, ButtonAnchor, cx, EmptyRow, NameCell, PageHeader, RowLink, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
+import { Alert, ButtonAnchor, EmptyRow, NameCell, PageHeader, PillTabs, RowLink, TableCard, tableClass, tdClass, thClass } from "@/components/ui";
 import { centerLabel, kindTag } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { daysUntil } from "@/lib/rules/centerSummary";
-import { formatThaiDate, formatThaiDateRange, formatThaiDateTime, todayISO, toISODate } from "@/lib/thai/date";
+import { formatThaiDate, formatThaiDateRange, formatThaiDateTime, thaiHour, todayISO, toISODate } from "@/lib/thai/date";
+import { greeting } from "@/lib/thai/name";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
 import { ApproveButton } from "./ApproveButton";
@@ -26,7 +26,7 @@ const TABS = [
 ] as const;
 
 const DONE_MESSAGE: Record<string, string> = {
-  approve: "อนุมัติแล้ว ใบเบิกส่งต่อให้ฝ่ายบัญชีเรียบร้อย",
+  approve: "อนุมัติแล้ว — ส่งใบเบิกที่เซ็นแล้วให้ฝ่ายบัญชีได้เลย",
   reject: "ไม่อนุมัติแล้ว ใบเบิกกลับไปให้ผู้จัดทำแก้ไข",
 };
 
@@ -56,6 +56,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
     <>
       <PageHeader
         icon={Stamp}
+        greeting={greeting(user.name, thaiHour())}
         title="รออนุมัติ"
         description={isApprover ? "ใบเบิกที่ส่งมาให้คุณ — ใกล้ครบกำหนดอยู่บนสุด" : "ใบที่รออนุมัติทั้งหมด (ดูอย่างเดียว)"}
       />
@@ -66,25 +67,10 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
         </div>
       )}
 
-      <nav className="mb-4 inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-sm">
-        {TABS.map((t) => (
-          <Link
-            key={t.key}
-            href={t.href}
-            aria-current={tab === t.key ? "page" : undefined}
-            className={cx(
-              "flex items-center gap-1.5 rounded-md px-4 py-1.5",
-              tab === t.key ? "bg-brand-700 font-medium text-white shadow-sm" : "text-slate-600 hover:bg-slate-100",
-            )}
-          >
-            <t.icon className="size-4" aria-hidden />
-            {t.label}
-            {t.key === "pending" && pending.length > 0 && (
-              <span className={cx("rounded-full px-1.5 text-xs", tab === t.key ? "bg-white/20" : "bg-slate-100")}>{pending.length}</span>
-            )}
-          </Link>
-        ))}
-      </nav>
+      <PillTabs
+        label="มุมมอง"
+        tabs={TABS.map((t) => ({ href: t.href, label: t.label, icon: t.icon, count: t.key === "pending" ? pending.length : 0, active: tab === t.key }))}
+      />
 
       {tab === "pending" ? (
         <>
@@ -154,7 +140,7 @@ type PendingRow = Awaited<ReturnType<typeof db.request.findMany<{ include: typeo
 function PendingCards({ rows, today, isApprover }: { rows: PendingRow[]; today: string; isApprover: boolean }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm md:hidden">
+      <div className="rounded-2xl border border-slate-200/70 bg-white px-4 py-12 text-center text-sm text-slate-500 shadow-sm md:hidden">
         <Inbox className="mx-auto mb-3 size-10 text-slate-300" aria-hidden />
         ไม่มีใบเบิกที่รออนุมัติ
       </div>
@@ -165,7 +151,7 @@ function PendingCards({ rows, today, isApprover }: { rows: PendingRow[]; today: 
       {rows.map((r) => {
         const due = toISODate(r.dueDate);
         return (
-          <li key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <li key={r.id} className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <NameCell {...centerLabel(r.center)} tag={kindTag(r.center)} href={`/requests/${r.id}`} />
               <div className="text-right">
@@ -222,11 +208,11 @@ function PendingCards({ rows, today, isApprover }: { rows: PendingRow[]; today: 
   );
 }
 
-// ใบที่อนุมัติแล้ว (รอจ่าย/จ่ายแล้ว) ล่าสุด 100 ใบ
+// ใบที่อนุมัติแล้ว (ส่งไปบัญชี/บัญชีรับแล้ว/จ่ายแล้ว) ล่าสุด 100 ใบ
 async function DoneTable({ where, showApprover }: { where: { approverId?: string }; showApprover: boolean }) {
   const requests = await db.request.findMany({
     where: {
-      status: { in: ["APPROVED", "PAID"] },
+      status: { in: ["APPROVED", "RECEIVED", "PAID"] },
       approvedAt: { not: null },
       deletedAt: null,
       ...where,

@@ -1,5 +1,6 @@
 import type { CenterStatus, Role } from "@/generated/prisma/enums";
 import { initialFormState } from "@/lib/formState";
+import { receiveDocument } from "@/server/actions/accounting";
 import { login } from "@/server/actions/auth";
 import { changeRequestSigners, changeRequestStatus, saveRequest } from "@/server/actions/requests";
 import { db } from "@/server/db";
@@ -112,5 +113,16 @@ export function requestFixtures(prefix: string) {
     return id;
   }
 
-  return { createUsers, loginAs, userId, center, valid, save, idFrom, status, pickSigners, pendingRequest, approvedRequest };
+  // ฝ่ายบัญชีกดรับเอกสาร (กระดาษ) แล้ว
+  const receive = (id: string, returnTo = "list") => run(() => receiveDocument(initialFormState, form({ id, returnTo })));
+
+  // ... + ฝ่ายบัญชีรับเอกสาร → คืน id ใบเบิกสถานะ RECEIVED (รอจ่าย)
+  async function receivedRequest(centerId: string, extra: Record<string, string> = {}) {
+    const id = await approvedRequest(centerId, extra);
+    await loginAs("ACCOUNTING");
+    await receive(id);
+    return id;
+  }
+
+  return { createUsers, loginAs, userId, center, valid, save, idFrom, status, pickSigners, pendingRequest, approvedRequest, receive, receivedRequest };
 }

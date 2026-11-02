@@ -28,3 +28,10 @@ export function formatAmount(input: AmountInput): string {
   const [int, frac] = toAmountString(input).split(".");
   return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}.${frac}`;
 }
+
+// สตางค์ → "1068.93" (ใช้กับยอดรวมที่บวกด้วย toSatang)
+export function fromSatang(satang: bigint): string {
+  const sign = satang < BigInt(0) ? "-" : "";
+  const abs = satang < BigInt(0) ? -satang : satang;
+  return `${sign}${abs / BigInt(100)}.${String(abs % BigInt(100)).padStart(2, "0")}`;
+}

@@ -1,25 +1,47 @@
-import { ArrowLeft, ArrowRightLeft, Banknote, Check, CircleX, Clock, ExternalLink, FileText, Paperclip, Pencil, Printer, Receipt, Send, Stamp, Trash, Undo2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRightLeft,
+  Banknote,
+  Check,
+  CircleX,
+  Clock,
+  ExternalLink,
+  FileText,
+  Inbox,
+  MapPin,
+  Paperclip,
+  Pencil,
+  Printer,
+  Receipt,
+  Send,
+  Smartphone,
+  Stamp,
+  Trash,
+  Undo2,
+  Wifi,
+} from "lucide-react";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import type { LogAction, RequestStatus } from "@/generated/prisma/enums";
-import { RequestStatusBadge } from "@/components/StatusBadge";
+import { REQUEST_TONE, RequestStatusBadge } from "@/components/StatusBadge";
 import { PhoneChargesTable } from "@/components/PhoneCharges";
 import { TransferForm } from "@/components/TransferForm";
-import { Alert, ButtonAnchor, ButtonLink, Card, CardTitle, cx, PageHeader, type IconType } from "@/components/ui";
+import { Alert, ButtonAnchor, ButtonLink, cx, PageHeader, SectionCard, TONE_SURFACE, type IconType } from "@/components/ui";
 import { kindHref } from "@/lib/auth/routes";
 import { centerCode } from "@/lib/centers/phone";
 import { formatAmount } from "@/lib/money";
 import { chosenSignersOf, resolveSigners, type ResolvedSigner } from "@/lib/pdf/memoData";
 import { storedCharges } from "@/lib/rules/phoneCharges";
-import { ACTION_LABEL, checkRequestAction, isAssignedApprover, returnedBy, STATUS_LABEL, type RequestAction } from "@/lib/status";
+import { ACTION_LABEL, checkRequestAction, documentLocation, isAssignedApprover, returnedBy, STATUS_LABEL, type RequestAction } from "@/lib/status";
 import { bahtText } from "@/lib/thai/bahtText";
 import { daysInclusive, formatThaiDate, formatThaiDateTime, toISODate, todayISO } from "@/lib/thai/date";
 import { requireUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { PayForm } from "../../accounting/PayForm";
+import { ReceiveButton } from "../../accounting/ReceiveButton";
 import { StatusActions } from "./StatusActions";
 
-const STEPS: RequestStatus[] = ["CREATED", "PENDING", "APPROVED", "PAID"];
+const STEPS: RequestStatus[] = ["CREATED", "PENDING", "APPROVED", "RECEIVED", "PAID"];
 
 const LOG_ICON: Record<LogAction, { icon: IconType; className: string }> = {
   CREATE: { icon: FileText, className: "bg-sky-100 text-sky-700" },
@@ -27,6 +49,7 @@ const LOG_ICON: Record<LogAction, { icon: IconType; className: string }> = {
   SEND: { icon: Send, className: "bg-amber-100 text-amber-700" },
   SUBMIT: { icon: Send, className: "bg-amber-100 text-amber-700" },
   APPROVE: { icon: Stamp, className: "bg-emerald-100 text-emerald-700" },
+  RECEIVE: { icon: Inbox, className: "bg-violet-100 text-violet-700" },
   REJECT: { icon: CircleX, className: "bg-red-100 text-red-700" },
   PAY: { icon: Banknote, className: "bg-emerald-100 text-emerald-700" },
   REVERT: { icon: Undo2, className: "bg-orange-100 text-orange-700" },
@@ -34,6 +57,8 @@ const LOG_ICON: Record<LogAction, { icon: IconType; className: string }> = {
   TRANSFER: { icon: ArrowRightLeft, className: "bg-slate-100 text-slate-600" },
 };
 
+// หน้ารายละเอียดใบเบิก (ปรับโฉม 2026-10-31 ผู้ใช้ขอ "ดูง่ายและสวยงาม"):
+// การ์ดหัวสีตามสถานะ (ศูนย์ + ยอด + ขั้นตอน + เอกสารอยู่ที่ใคร) → ซ้าย: ข้อมูล/ผู้ลงนาม/ใบแจ้งหนี้/ประวัติ · ขวา: ดำเนินการ (เลื่อนตามจอ)
 export default async function RequestDetailPage({ params, searchParams }: PageProps<"/requests/[id]">) {
   // ทุกบทบาทดูรายละเอียดได้ (บัญชีเปิดจากหน้าฝ่ายบัญชี) — ปุ่มที่ทำได้ขึ้นกับ state machine
   const user = await requireUser();
@@ -75,13 +100,16 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
   const hasCharges = storedCharges(request) !== null;
   const list = kindHref("/requests", request.center.kind);
   const backHref = { ACCOUNTING: "/accounting", APPROVER: "/approvals", CREATOR: list, ADMIN: list }[user.role];
+  // การ์ดหัว: สีตามสถานะ (ใบที่ลบ = เทา) · ไอคอน/สีประจำประเภท (อินเทอร์เน็ต = ฟ้า, โทรศัพท์ = ส้ม)
+  const tone = deleted ? "zinc" : REQUEST_TONE[request.status];
+  const KindIcon = phone ? Smartphone : Wifi;
 
   return (
     <>
       <PageHeader
         icon={Receipt}
-        title={`ใบเบิก ${request.center.name}`}
-        description={`รอบบริการ ${formatThaiDate(periodStart)} – ${formatThaiDate(periodEnd)} · ${phone ? "เบอร์" : "รหัสลูกค้า"} ${centerCode(request.center)}`}
+        title="ใบเบิก"
+        description={`${phone ? "ค่าโทรศัพท์" : "ค่าอินเทอร์เน็ต"} · สร้าง ${formatThaiDate(todayISO(request.createdAt))} โดย ${request.createdBy.name}`}
         actions={
           <ButtonLink href={backHref} variant="secondary" icon={ArrowLeft}>
             กลับ
@@ -89,13 +117,48 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
         }
       />
 
-      {deleted ? (
-        <div className="mb-6">
-          <Alert tone="error">ใบเบิกนี้ถูกลบแล้ว (เก็บไว้เป็นประวัติเท่านั้น)</Alert>
+      <section className={cx("mb-6 rounded-2xl border border-l-4 p-5 shadow-sm sm:p-6", TONE_SURFACE[tone])}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className={cx("flex size-12 shrink-0 items-center justify-center rounded-2xl", phone ? "bg-orange-100 text-orange-700" : "bg-sky-100 text-sky-700")}>
+              <KindIcon className="size-6" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-bold leading-snug text-slate-900">{phone ? centerCode(request.center) : request.center.name}</h2>
+                <RequestStatusBadge status={request.status} />
+              </div>
+              <div className="mt-0.5 text-sm text-slate-600">
+                {phone ? `ผู้ใช้: ${request.center.name}` : `รหัสลูกค้า ${request.center.customerCode}`} · {request.center.provider} · ใบแจ้งหนี้{" "}
+                <span className="tabular-nums">{request.invoiceNo}</span>
+              </div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-3xl font-bold tabular-nums tracking-tight text-slate-900">
+              {formatAmount(request.amount)} <span className="text-base font-medium text-slate-500">บาท</span>
+            </div>
+            <div className="text-sm text-slate-600">({bahtText(request.amount)})</div>
+          </div>
         </div>
-      ) : (
-        <Stepper status={request.status} />
-      )}
+
+        {deleted ? (
+          <div className="mt-4">
+            <Alert tone="error">ใบเบิกนี้ถูกลบแล้ว (เก็บไว้เป็นประวัติเท่านั้น)</Alert>
+          </div>
+        ) : (
+          <>
+            <Stepper status={request.status} />
+            {/* ใบเบิกยังเป็นกระดาษ — บอกว่าเอกสารอยู่ที่ใคร */}
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-white/70 px-4 py-2.5 text-sm text-slate-700">
+              <MapPin className="size-4 shrink-0 text-brand-500" aria-hidden />
+              <span>
+                เอกสารอยู่ที่ <span className="font-semibold text-slate-900">{documentLocation(request)}</span>
+              </span>
+            </div>
+          </>
+        )}
+      </section>
 
       {transferred && (
         <div className="mb-6">
@@ -117,28 +180,11 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-6 lg:col-span-2">
-          <Card flush>
-            <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-100 px-6 py-5">
-              <div>
-                <div className="text-sm text-slate-500">ยอดเบิก</div>
-                <div className="text-3xl font-bold tabular-nums tracking-tight text-slate-900">
-                  {formatAmount(request.amount)} <span className="text-lg font-medium text-slate-500">บาท</span>
-                </div>
-                <div className="mt-0.5 text-sm text-slate-500">({bahtText(request.amount)})</div>
-              </div>
-              <RequestStatusBadge status={request.status} />
-            </div>
-            {/* ข้อมูลใบเบิก / ยอดแยก (ค่าโทรศัพท์) / ผู้ลงนาม — ตารางหัวข้อซ้าย-ค่าขวา อ่านไล่ลงมาทีละแถว */}
-            <div className="flex flex-col gap-5 px-6 py-5">
-              <InfoTable title="ข้อมูลใบเบิก">
-                <Item label={phone ? "เบอร์โทรศัพท์" : "ศูนย์"}>
-                  {phone ? <span className="tabular-nums">{centerCode(request.center)}</span> : request.center.name}
-                  <Muted>
-                    {" "}
-                    · {request.center.provider} · {phone ? request.center.name : request.center.customerCode}
-                  </Muted>
-                </Item>
+        <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+          {/* ข้อมูลใบเบิก / ยอดแยก (ค่าโทรศัพท์) — ตารางหัวข้อซ้าย-ค่าขวา อ่านไล่ลงมาทีละแถว */}
+          <SectionCard icon={FileText} title="ข้อมูลใบเบิก">
+            <div className="flex flex-col gap-5">
+              <InfoTable>
                 <Item label="เลขที่ใบแจ้งหนี้">
                   <span className="break-all tabular-nums">{request.invoiceNo}</span>
                 </Item>
@@ -167,6 +213,7 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
                     <span className="font-medium text-amber-700">ไม่ได้แนบไฟล์</span>
                   )}
                 </Item>
+                {request.receivedAt && <Item label="บัญชีรับเอกสาร">{formatThaiDateTime(request.receivedAt)} น.</Item>}
                 {request.paidDate && <Item label="วันที่จ่าย">{formatThaiDate(toISODate(request.paidDate))}</Item>}
                 {request.paymentRef && (
                   <Item label="เลขอ้างอิงการจ่าย">
@@ -177,24 +224,25 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
 
               {/* ค่าโทรศัพท์: ยอดแยกแบบในบิล ให้ผู้ดู/ผู้อนุมัติเห็นชัด (ไม่พิมพ์ใน PDF) */}
               {hasCharges && <PhoneChargesTable request={request} />}
-
-              {/* ผู้ลงนามที่พิมพ์ในใบเบิก — แสดงอย่างเดียว เปลี่ยนได้ที่ "แก้ไข" */}
-              <InfoTable title="ผู้ลงนาม">
-                <Item label="ผู้จัดทำ">{request.createdBy.name}</Item>
-                <SignerItem label="ผู้ขออนุมัติ" signer={signers.requester} />
-                <SignerItem label="ผู้อนุมัติ" signer={signers.approver}>
-                  {request.approvedAt && (
-                    <div className="text-xs font-medium text-emerald-700">อนุมัติแล้ว {formatThaiDateTime(request.approvedAt)} น.</div>
-                  )}
-                </SignerItem>
-              </InfoTable>
             </div>
-          </Card>
+          </SectionCard>
+
+          {/* ผู้ลงนามที่พิมพ์ในใบเบิก — แสดงอย่างเดียว เปลี่ยนได้ที่ "แก้ไข" */}
+          <SectionCard icon={Stamp} title="ผู้ลงนาม">
+            <InfoTable>
+              <Item label="ผู้จัดทำ">{request.createdBy.name}</Item>
+              <SignerItem label="ผู้ขออนุมัติ" signer={signers.requester} />
+              <SignerItem label="ผู้อนุมัติ" signer={signers.approver}>
+                {request.approvedAt && (
+                  <div className="text-xs font-medium text-emerald-700">อนุมัติแล้ว {formatThaiDateTime(request.approvedAt)} น.</div>
+                )}
+              </SignerItem>
+            </InfoTable>
+          </SectionCard>
 
           {request.invoiceFileKey && <InvoicePreview id={request.id} fileKey={request.invoiceFileKey} fileName={request.invoiceFileName} />}
 
-          <Card>
-            <CardTitle icon={Clock}>ประวัติ</CardTitle>
+          <SectionCard icon={Clock} title="ประวัติ">
             {request.logs.length === 0 ? (
               <p className="text-sm text-slate-400">ยังไม่มีประวัติ</p>
             ) : (
@@ -220,84 +268,90 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
                         <div className="text-slate-500">
                           {log.actor.name} · {formatThaiDateTime(log.createdAt)}
                         </div>
-                        {log.note && <div className="mt-1 rounded-md bg-slate-50 px-2.5 py-1.5 text-slate-700">{log.note}</div>}
+                        {log.note && <div className="mt-1 rounded-lg bg-slate-50 px-2.5 py-1.5 text-slate-700">{log.note}</div>}
                       </div>
                     </li>
                   );
                 })}
               </ol>
             )}
-          </Card>
+          </SectionCard>
         </div>
 
-        <div className="order-first flex flex-col gap-6 lg:order-none">
-          <Card className="h-fit">
-            <CardTitle>ดำเนินการ</CardTitle>
-            <div className="flex flex-col gap-3">
-              {!deleted && (
-                <ButtonAnchor href={`/api/requests/${request.id}/pdf`} target="_blank" rel="noopener" icon={Printer}>
-                  พิมพ์ใบเบิก (PDF)
-                </ButtonAnchor>
-              )}
-              {can("EDIT") && (
-                <ButtonLink href={`/requests/${request.id}/edit`} variant="secondary" icon={Pencil}>
-                  แก้ไข
-                </ButtonLink>
-              )}
-              <StatusActions
-                id={request.id}
-                canSubmit={can("SUBMIT")}
-                submitBlocked={request.approverId ? undefined : "ยังไม่ได้เลือกผู้อนุมัติ — กด “แก้ไข” เพื่อเลือก"}
-                approverName={request.approverName}
-                canApprove={isMyApproval}
-                canDelete={can("DELETE")}
-                deleteNeedsNote={request.imported}
-                canRevert={can("REVERT")}
-              />
-              {!deleted && request.status === "PENDING" && !isMyApproval && (
-                <p className="text-sm text-slate-500">รอ {request.approverName} อนุมัติ</p>
-              )}
-              {!deleted && request.imported ? (
-                <p className="text-sm text-slate-500">
-                  ใบย้อนหลังที่นำเข้าจากตารางเดิม (จ่ายก่อนเริ่มใช้ระบบ) — แก้ไขไม่ได้{user.role === "ADMIN" ? " ถ้านำเข้าผิดให้ลบแล้วนำเข้าใหม่" : ""}
-                </p>
-              ) : (
-                request.status === "PAID" && <p className="text-sm text-slate-500">ใบเบิกนี้จ่ายแล้ว ถูกล็อก แก้ไขไม่ได้</p>
-              )}
-              {othersDraft && (
-                <p className="text-xs text-slate-500">
-                  ใบเบิกนี้เป็นของ {request.createdBy.name} — แก้ไข/ลบ/ส่งขออนุมัติได้เฉพาะผู้สร้างใบ ถ้า {request.createdBy.name} ไม่อยู่
-                  ให้ผู้ดูแลระบบโอนใบให้
-                </p>
-              )}
-              {!deleted && request.status !== "CREATED" && user.role === "CREATOR" && (
-                <p className="text-xs text-slate-500">
-                  ใบเบิกที่{STATUS_LABEL[request.status]}แก้ไขไม่ได้ ถ้าต้องแก้ ให้ผู้อนุมัติกด “ไม่อนุมัติ” หรือติดต่อผู้ดูแลระบบให้ย้อนสถานะ
-                </p>
-              )}
-            </div>
-          </Card>
+        {/* คอลัมน์ขวา: งานที่ทำได้กับใบนี้ — จอใหญ่เลื่อนตามจอ */}
+        <div className="order-first min-w-0 lg:order-none">
+          <div className="flex flex-col gap-6 lg:sticky lg:top-24">
+            <SectionCard icon={Send} title="ดำเนินการ">
+              {/* ปุ่มหลักตามสถานะ (ส่งขออนุมัติ / อนุมัติ) ขึ้นก่อน → แก้ไข (กรมท่าอ่อน) → พิมพ์ (ฟ้าอ่อน) → ลบแยกไว้ล่างสุด */}
+              <div className="flex flex-col gap-3">
+                <StatusActions
+                  id={request.id}
+                  canSubmit={can("SUBMIT")}
+                  submitBlocked={request.approverId ? undefined : "ยังไม่ได้เลือกผู้อนุมัติ — กด “แก้ไข” เพื่อเลือก"}
+                  approverName={request.approverName}
+                  canApprove={isMyApproval}
+                  canDelete={false}
+                  canRevert={can("REVERT")}
+                />
+                {can("EDIT") && (
+                  <ButtonLink href={`/requests/${request.id}/edit`} variant="soft" icon={Pencil}>
+                    แก้ไข
+                  </ButtonLink>
+                )}
+                {!deleted && (
+                  <ButtonAnchor href={`/api/requests/${request.id}/pdf`} target="_blank" rel="noopener" variant="info" icon={Printer}>
+                    พิมพ์ใบเบิก (PDF)
+                  </ButtonAnchor>
+                )}
+                {can("DELETE") && (
+                  <div className="border-t border-slate-100 pt-3">
+                    <StatusActions id={request.id} canSubmit={false} approverName={request.approverName} canApprove={false} canDelete canRevert={false} />
+                  </div>
+                )}
+                {!deleted && request.status === "PENDING" && !isMyApproval && (
+                  <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">รอ {request.approverName} อนุมัติ</p>
+                )}
+                {!deleted && request.status === "PAID" && (
+                  <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">ใบเบิกนี้จ่ายแล้ว ถูกล็อก แก้ไขไม่ได้</p>
+                )}
+                {othersDraft && (
+                  <p className="text-xs text-slate-500">
+                    ใบเบิกนี้เป็นของ {request.createdBy.name} — แก้ไข/ลบ/ส่งขออนุมัติได้เฉพาะผู้สร้างใบ ถ้า {request.createdBy.name} ไม่อยู่
+                    ให้ผู้ดูแลระบบโอนใบให้
+                  </p>
+                )}
+                {!deleted && request.status !== "CREATED" && user.role === "CREATOR" && (
+                  <p className="text-xs text-slate-500">
+                    ใบเบิกที่{STATUS_LABEL[request.status]}แก้ไขไม่ได้ ถ้าต้องแก้ ให้ผู้อนุมัติกด “ไม่อนุมัติ” หรือติดต่อผู้ดูแลระบบให้ย้อนสถานะ
+                  </p>
+                )}
+              </div>
+            </SectionCard>
 
-          {can("TRANSFER") && (
-            <Card>
-              <CardTitle icon={ArrowRightLeft}>โอนใบเบิก</CardTitle>
-              <p className="mb-3 text-sm text-slate-600">
-                ตอนนี้เป็นของ {request.createdBy.name} — ผู้รับโอนจะแก้ไข/ลบ/ส่งขออนุมัติได้แทน
-              </p>
-              <TransferForm
-                target={{ requestId: request.id }}
-                creators={creators}
-                confirmText={`โอนใบเบิกนี้จาก ${request.createdBy.name} ให้ผู้จัดทำที่เลือก?`}
-              />
-            </Card>
-          )}
+            {can("RECEIVE") && (
+              <SectionCard icon={Inbox} title="รับเอกสาร">
+                <p className="mb-3 text-sm text-slate-600">กดเมื่อได้รับใบเบิกกระดาษที่ผู้อนุมัติเซ็นแล้ว จากนั้นจึงบันทึกการจ่ายได้</p>
+                <ReceiveButton id={request.id} returnTo="detail" full />
+              </SectionCard>
+            )}
 
-          {can("PAY") && (
-            <Card>
-              <CardTitle icon={Banknote}>บันทึกการจ่าย</CardTitle>
-              <PayForm id={request.id} today={todayISO()} returnTo="detail" />
-            </Card>
-          )}
+            {can("PAY") && (
+              <SectionCard icon={Banknote} title="บันทึกการจ่าย">
+                <PayForm id={request.id} today={todayISO()} returnTo="detail" />
+              </SectionCard>
+            )}
+
+            {can("TRANSFER") && (
+              <SectionCard icon={ArrowRightLeft} title="โอนใบเบิก">
+                <p className="mb-3 text-sm text-slate-600">ตอนนี้เป็นของ {request.createdBy.name} — ผู้รับโอนจะแก้ไข/ลบ/ส่งขออนุมัติได้แทน</p>
+                <TransferForm
+                  target={{ requestId: request.id }}
+                  creators={creators}
+                  confirmText={`โอนใบเบิกนี้จาก ${request.createdBy.name} ให้ผู้จัดทำที่เลือก?`}
+                />
+              </SectionCard>
+            )}
+          </div>
         </div>
       </div>
     </>
@@ -310,39 +364,43 @@ function InvoicePreview({ id, fileKey, fileName }: { id: string; fileKey: string
   const src = `/api/requests/${id}/invoice`;
   const isPdf = fileKey.endsWith(".pdf");
   return (
-    <Card flush>
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
-        <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold text-slate-900">
-          <Paperclip className="size-4 shrink-0 text-slate-400" aria-hidden />
-          <span className="truncate">ใบแจ้งหนี้{fileName && <span className="font-normal text-slate-500"> · {fileName}</span>}</span>
-        </h2>
+    <SectionCard
+      icon={Paperclip}
+      title={
+        <>
+          ใบแจ้งหนี้{fileName && <span className="font-normal text-slate-500"> · {fileName}</span>}
+        </>
+      }
+      actions={
         <ButtonAnchor href={src} target="_blank" rel="noopener" variant="secondary" size="sm" icon={ExternalLink} className="shrink-0">
           เปิดในแท็บใหม่
         </ButtonAnchor>
-      </div>
+      }
+      flush
+    >
       {isPdf ? (
-        <iframe src={`${src}#view=FitH`} title="ใบแจ้งหนี้" className="h-[70vh] min-h-96 w-full rounded-b-xl bg-slate-100" />
+        <iframe src={`${src}#view=FitH`} title="ใบแจ้งหนี้" className="h-[70vh] min-h-96 w-full bg-slate-100" />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element -- ไฟล์จาก API ที่ต้องล็อกอิน ไม่ผ่าน next/image
-        <img src={src} alt={`ใบแจ้งหนี้ ${fileName ?? ""}`} className="mx-auto max-h-[70vh] w-auto rounded-b-xl p-4" />
+        <img src={src} alt={`ใบแจ้งหนี้ ${fileName ?? ""}`} className="mx-auto max-h-[70vh] w-auto p-4" />
       )}
-    </Card>
+    </SectionCard>
   );
 }
 
-// แถบขั้นตอน: สร้างแล้ว → รออนุมัติ → อนุมัติแล้ว → จ่ายแล้ว
+// แถบขั้นตอน (ในการ์ดหัว): สร้างแล้ว → รออนุมัติ → อนุมัติแล้ว → บัญชีรับแล้ว → จ่ายแล้ว
 function Stepper({ status }: { status: RequestStatus }) {
   const current = STEPS.indexOf(status);
   return (
-    <ol className="mb-6 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+    <ol className="mt-5 flex items-center gap-1 rounded-xl bg-white/70 px-3 py-3 sm:gap-2 sm:px-4">
       {STEPS.map((step, i) => {
         const done = i < current || status === "PAID";
         const active = i === current && status !== "PAID";
         return (
-          <li key={step} className="flex flex-1 items-center gap-2 last:flex-none">
+          <li key={step} className="flex min-w-0 flex-1 items-center gap-1.5 last:flex-none sm:gap-2">
             <span
               className={cx(
-                "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+                "flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold sm:size-8",
                 done && "bg-brand-600 text-white",
                 active && "bg-brand-100 text-brand-800 ring-2 ring-brand-600",
                 !done && !active && "bg-slate-100 text-slate-400",
@@ -350,10 +408,11 @@ function Stepper({ status }: { status: RequestStatus }) {
             >
               {done ? <Check className="size-4" aria-hidden /> : i + 1}
             </span>
-            <span className={cx("whitespace-nowrap text-sm", done || active ? "font-medium text-slate-900" : "text-slate-400", !active && "hidden sm:inline")}>
+            {/* มือถือ: เฉพาะวงตัวเลข (บรรทัด "เอกสารอยู่ที่" บอกขั้นแล้ว) */}
+            <span className={cx("hidden whitespace-nowrap text-sm sm:inline", done || active ? "font-medium text-slate-900" : "text-slate-400")}>
               {STATUS_LABEL[step]}
             </span>
-            {i < STEPS.length - 1 && <span className={cx("mx-2 h-px flex-1", i < current ? "bg-brand-600" : "bg-slate-200")} aria-hidden />}
+            {i < STEPS.length - 1 && <span className={cx("mx-1 h-px min-w-2 flex-1 sm:mx-2", i < current ? "bg-brand-600" : "bg-slate-200")} aria-hidden />}
           </li>
         );
       })}
@@ -372,11 +431,11 @@ function SignerItem({ label, signer, children }: { label: string; signer: Resolv
 }
 
 // ตารางหัวข้อ-ค่า แบบเดียวกับตารางยอดแยกค่าโทรศัพท์ (PhoneChargesTable)
-function InfoTable({ title, children }: { title: string; children: ReactNode }) {
+function InfoTable({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <section>
-      <h3 className="mb-2 text-sm font-semibold text-slate-800">{title}</h3>
-      <dl className="divide-y divide-slate-200 overflow-hidden rounded-lg border border-slate-200 text-sm">{children}</dl>
+      {title && <h3 className="mb-2 text-sm font-semibold text-slate-800">{title}</h3>}
+      <dl className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200/70 text-sm">{children}</dl>
     </section>
   );
 }

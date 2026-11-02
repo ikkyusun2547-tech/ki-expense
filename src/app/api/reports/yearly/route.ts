@@ -4,17 +4,14 @@ import { centerCode } from "@/lib/centers/phone";
 import { yearlyFileName, yearlyPrintSetup, yearlyReport } from "@/lib/reports/yearlyReport";
 import { WORKBOOK_FONT, XLSX_CONTENT_TYPE } from "@/lib/reports/xlsx";
 import { formatThaiDateTime, toISODate, todayISO } from "@/lib/thai/date";
-import { requireRole, requireUser } from "@/server/auth";
+import { requireUser } from "@/server/auth";
 import { db } from "@/server/db";
 
-// ดาวน์โหลดตารางรายปี (แทนตารางสรุปที่เคยเขียนมือ) — ทุกบทบาทที่ล็อกอิน (เหมือนหน้าสรุปรายศูนย์)
+// ดาวน์โหลดตารางรายปี (แทนตารางสรุปที่เคยเขียนมือ) — ทุกบทบาทที่ล็อกอิน (เหมือนหน้าศูนย์ & เบอร์)
 // ?kind=INTERNET|PHONE&year=YYYY (ค.ศ.) ไม่ระบุ = ค่าอินเทอร์เน็ต ปีนี้
-// &template=1 = แบบฟอร์มนำเข้า (admin): ครบ 12 เดือน + ศูนย์ในทะเบียน + แถวว่างให้กรอกจากกระดาษ แล้วนำเข้าที่หน้านำเข้าทะเบียน
 export async function GET(request: Request) {
+  await requireUser();
   const params = new URL(request.url).searchParams;
-  const template = params.get("template") === "1";
-  if (template) await requireRole("ADMIN");
-  else await requireUser();
 
   const kind: ServiceKind = params.get("kind") === "PHONE" ? "PHONE" : "INTERNET";
   const yearParam = Number(params.get("year"));
@@ -48,7 +45,6 @@ export async function GET(request: Request) {
       paid: r.status === "PAID",
     })),
     `${formatThaiDateTime(new Date())} น.`,
-    { template },
   );
   const file = await writeExcelFile(report.sheet, report.options, {
     ...WORKBOOK_FONT,
@@ -58,7 +54,7 @@ export async function GET(request: Request) {
   return new Response(new Uint8Array(file), {
     headers: {
       "Content-Type": XLSX_CONTENT_TYPE,
-      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(yearlyFileName(kind, year, template))}`,
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(yearlyFileName(kind, year))}`,
       "Cache-Control": "private, no-store",
     },
   });

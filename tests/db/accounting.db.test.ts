@@ -3,11 +3,11 @@ import { initialFormState } from "@/lib/formState";
 import { todayISO } from "@/lib/thai/date";
 import { recordPayment } from "@/server/actions/accounting";
 import { db } from "@/server/db";
-import { getCenterSummaries } from "@/server/services/summary";
+import { getCenterCards } from "@/server/services/summary";
 import { form, run } from "./helpers";
 import { requestFixtures } from "./requestFixtures";
 
-const { createUsers, loginAs, center, valid, save, idFrom, status, approvedRequest } = requestFixtures("zz-acc-");
+const { createUsers, loginAs, center, valid, save, idFrom, status, approvedRequest, receive, receivedRequest } = requestFixtures("zz-acc-");
 
 const pay = (id: string, paidDate: string, paymentRef: string, returnTo = "list") =>
   run(() => recordPayment(initialFormState, form({ id, paidDate, paymentRef, returnTo })));
@@ -15,13 +15,68 @@ const pay = (id: string, paidDate: string, paymentRef: string, returnTo = "list"
 beforeAll(createUsers);
 afterAll(() => db.$disconnect());
 
-describe("ฝ่ายบัญชีบันทึกการจ่าย", () => {
-  it("ใบที่อนุมัติแล้ว → จ่ายแล้ว พร้อมวันที่จ่าย เลขอ้างอิง และ log", async () => {
+describe("ฝ่ายบัญชีรับเอกสาร", () => {
+  it("ใบที่อนุมัติแล้ว → บัญชีรับแล้ว พร้อมเวลารับ และ log", async () => {
     const c = await center();
     const id = await approvedRequest(c.id);
 
     await loginAs("ACCOUNTING");
-    expect(await pay(id, "2026-10-20", " PV-001 ")).toEqual({ redirect: "/accounting?paid=1" });
+    expect(await receive(id)).toEqual({ redirect: "/accounting?received=1" });
+
+    const r = await db.request.findUniqueOrThrow({ where: { id }, include: { logs: { orderBy: { createdAt: "asc" } } } });
+    expect(r.status).toBe("RECEIVED");
+    expect(r.receivedAt).toBeInstanceOf(Date);
+    expect(r.approvedAt).toBeInstanceOf(Date); // เวลาอนุมัติคงเดิม (พิมพ์ในใบเบิก)
+    expect(r.logs.at(-1)).toMatchObject({ action: "RECEIVE", fromStatus: "APPROVED", toStatus: "RECEIVED" });
+  });
+
+  it("จากหน้ารายละเอียด → กลับไปหน้ารายละเอียด; รับซ้ำไม่ได้", async () => {
+    const c = await center();
+    const id = await approvedRequest(c.id);
+    await loginAs("ACCOUNTING");
+    expect(await receive(id, "detail")).toEqual({ redirect: `/requests/${id}` });
+    expect(await receive(id)).toEqual({ result: { error: 'ใบเบิกสถานะ "บัญชีรับแล้ว" รับเอกสารไม่ได้' } });
+  });
+
+  it("ใบที่ยังไม่อนุมัติ รับเอกสารไม่ได้", async () => {
+    const c = await center();
+    await loginAs("CREATOR");
+    const id = idFrom(await save(valid(c.id)));
+    await loginAs("ACCOUNTING");
+    expect(await receive(id)).toEqual({ result: { error: 'ใบเบิกสถานะ "สร้างแล้ว" รับเอกสารไม่ได้' } });
+  });
+
+  it.each(["CREATOR", "APPROVER", "ADMIN"] as const)("%s รับเอกสารแทนบัญชีไม่ได้", async (role) => {
+    const c = await center();
+    const id = await approvedRequest(c.id);
+    await loginAs(role);
+    expect(await receive(id)).toEqual({ redirect: "/" });
+    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("APPROVED");
+  });
+
+  it("admin ย้อนสถานะใบที่บัญชีรับแล้ว → สร้างแล้ว ล้างเวลาอนุมัติ/เวลารับ", async () => {
+    const c = await center();
+    const id = await receivedRequest(c.id);
+    await loginAs("ADMIN");
+    expect(await status(id, "REVERT", "เอกสารไม่ครบ")).toEqual({ redirect: `/requests/${id}` });
+    expect(await db.request.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "CREATED", approvedAt: null, receivedAt: null });
+  });
+});
+
+describe("ฝ่ายบัญชีบันทึกการจ่าย", () => {
+  it("ใบที่ยังไม่รับเอกสาร (อนุมัติแล้ว) จ่ายไม่ได้", async () => {
+    const c = await center();
+    const id = await approvedRequest(c.id);
+    await loginAs("ACCOUNTING");
+    expect(await pay(id, "2026-10-20", "")).toMatchObject({ result: { error: 'ใบเบิกสถานะ "อนุมัติแล้ว" บันทึกการจ่ายไม่ได้' } });
+    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("APPROVED");
+  });
+
+  it("ใบที่บัญชีรับแล้ว → จ่ายแล้ว พร้อมวันที่จ่าย เลขอ้างอิง และ log", async () => {
+    const c = await center();
+    const id = await receivedRequest(c.id);
+
+    expect(await pay(id, "2026-10-20", " PV-001 ")).toEqual({ redirect: "/accounting?tab=pay&paid=1" });
 
     const r = await db.request.findUniqueOrThrow({ where: { id }, include: { logs: { orderBy: { createdAt: "asc" } } } });
     expect(r.status).toBe("PAID");
@@ -29,7 +84,7 @@ describe("ฝ่ายบัญชีบันทึกการจ่าย", (
     expect(r.paymentRef).toBe("PV-001");
     expect(r.logs.at(-1)).toMatchObject({
       action: "PAY",
-      fromStatus: "APPROVED",
+      fromStatus: "RECEIVED",
       toStatus: "PAID",
       note: "จ่ายวันที่ 20 ต.ค. 2569 เลขอ้างอิง PV-001",
     });
@@ -37,26 +92,23 @@ describe("ฝ่ายบัญชีบันทึกการจ่าย", (
 
   it("จากหน้ารายละเอียด → กลับไปหน้ารายละเอียด", async () => {
     const c = await center();
-    const id = await approvedRequest(c.id);
-    await loginAs("ACCOUNTING");
+    const id = await receivedRequest(c.id);
     expect(await pay(id, "2026-10-20", "PV-002", "detail")).toEqual({ redirect: `/requests/${id}` });
   });
 
   it("ต้องกรอกวันที่ (เลขอ้างอิงไม่บังคับ) วันที่ห้ามเกินวันนี้ — ไม่ผ่านแล้วไม่มีอะไรเปลี่ยน", async () => {
     const c = await center();
-    const id = await approvedRequest(c.id);
-    await loginAs("ACCOUNTING");
+    const id = await receivedRequest(c.id);
 
     expect(await pay(id, "", "")).toMatchObject({ result: { fieldErrors: { paidDate: ["กรอกวันที่จ่าย"] } } });
     expect(await pay(id, "2999-01-01", "PV")).toMatchObject({ result: { fieldErrors: { paidDate: ["วันที่จ่ายต้องไม่เกินวันนี้"] } } });
-    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("APPROVED");
+    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("RECEIVED");
   });
 
   it("ไม่กรอกเลขอ้างอิงก็บันทึกจ่ายได้ (เก็บเป็น null, log ไม่ต่อท้ายเลขอ้างอิง)", async () => {
     const c = await center();
-    const id = await approvedRequest(c.id);
-    await loginAs("ACCOUNTING");
-    expect(await pay(id, "2026-10-20", " ")).toEqual({ redirect: "/accounting?paid=1" });
+    const id = await receivedRequest(c.id);
+    expect(await pay(id, "2026-10-20", " ")).toEqual({ redirect: "/accounting?tab=pay&paid=1" });
     expect(await db.request.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "PAID", paymentRef: null });
     const log = await db.approvalLog.findFirstOrThrow({ where: { requestId: id, action: "PAY" } });
     expect(log.note).toBe("จ่ายวันที่ 20 ต.ค. 2569");
@@ -74,16 +126,15 @@ describe("ฝ่ายบัญชีบันทึกการจ่าย", (
 
   it.each(["CREATOR", "ADMIN"] as const)("%s บันทึกการจ่ายไม่ได้", async (role) => {
     const c = await center();
-    const id = await approvedRequest(c.id);
+    const id = await receivedRequest(c.id);
     await loginAs(role);
     expect(await pay(id, "2026-10-20", "PV")).toEqual({ redirect: "/" });
-    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("APPROVED");
+    expect((await db.request.findUniqueOrThrow({ where: { id } })).status).toBe("RECEIVED");
   });
 
   it("จ่ายแล้วล็อก: จ่ายซ้ำ/ย้อนสถานะ/แก้ไข/ลบ ไม่ได้", async () => {
     const c = await center();
-    const id = await approvedRequest(c.id);
-    await loginAs("ACCOUNTING");
+    const id = await receivedRequest(c.id);
     await pay(id, "2026-10-20", "PV-LOCK");
 
     expect(await pay(id, "2026-10-21", "PV-2")).toMatchObject({ result: { error: 'ใบเบิกสถานะ "จ่ายแล้ว" บันทึกการจ่ายไม่ได้' } });
@@ -98,36 +149,31 @@ describe("ฝ่ายบัญชีบันทึกการจ่าย", (
   });
 });
 
-describe("ตารางสรุปรายศูนย์ (อ่านจาก DB จริง)", () => {
-  // วันที่ติดตาม: 22 ต.ค. 2569
-  const today = "2026-10-22";
-  const rowOf = async (centerId: string) => (await getCenterSummaries(today)).find((r) => r.center.id === centerId);
+describe("การ์ดศูนย์ — ใบเบิกล่าสุด (อ่านจาก DB จริง)", () => {
+  const cardOf = async (centerId: string) => (await getCenterCards()).find((r) => r.center.id === centerId);
 
-  it("แยกสถานะ: เลยกำหนด / ใกล้ครบ / ยังไม่ถึงรอบ / เบิกแล้ว", async () => {
-    const overdue = await center({ dueDay: 15 });
-    const soon = await center({ dueDay: 25 });
-    const notYet = await center({ dueDay: 31 });
-    const requested = await center({ dueDay: 15 });
-    const id = await approvedRequest(requested.id, { dueDate: "2026-10-15" });
-
-    expect(await rowOf(overdue.id)).toMatchObject({ state: "OVERDUE", dueDate: "2026-10-15", daysLeft: -7 });
-    expect(await rowOf(soon.id)).toMatchObject({ state: "DUE_SOON", dueDate: "2026-10-25", daysLeft: 3 });
-    expect(await rowOf(notYet.id)).toMatchObject({ state: "NOT_YET", dueDate: "2026-10-31", daysLeft: 9 });
-    expect(await rowOf(requested.id)).toMatchObject({ state: "REQUESTED", request: { id, status: "APPROVED" } });
+  it("ยังไม่เคยเบิก = ไม่มีใบล่าสุด; มีใบแล้ว = ใบที่รอบบริการใหม่สุดพร้อมสถานะ", async () => {
+    const c = await center();
+    expect((await cardOf(c.id))?.latest).toBeUndefined();
+    const older = await approvedRequest(c.id, { periodStart: "2026-08-01", periodEnd: "2026-08-31", dueDate: "2026-09-15" });
+    expect((await cardOf(c.id))?.latest).toMatchObject({ id: older, status: "APPROVED", periodStart: "2026-08-01" });
+    await loginAs("CREATOR");
+    const newer = idFrom(await save({ ...valid(c.id), confirmWarnings: "1" }));
+    expect((await cardOf(c.id))?.latest).toMatchObject({ id: newer, status: "CREATED" });
   });
 
-  it("ใบเบิกที่ถูกลบไม่นับว่าเบิกแล้ว", async () => {
-    const c = await center({ dueDay: 15 });
+  it("ใบเบิกที่ถูกลบไม่นับเป็นใบล่าสุด", async () => {
+    const c = await center();
     await loginAs("CREATOR");
     const id = idFrom(await save(valid(c.id)));
-    expect(await rowOf(c.id)).toMatchObject({ state: "REQUESTED" });
+    expect((await cardOf(c.id))?.latest?.id).toBe(id);
     await status(id, "DELETE");
-    expect(await rowOf(c.id)).toMatchObject({ state: "OVERDUE" });
+    expect((await cardOf(c.id))?.latest).toBeUndefined();
   });
 
-  it("ศูนย์ที่ย้าย/ปิด ไม่อยู่ในตาราง", async () => {
+  it("ศูนย์ที่ย้าย/ปิด ไม่มีการ์ด", async () => {
     const moved = await center({ status: "MOVED" });
-    expect(await rowOf(moved.id)).toBeUndefined();
+    expect(await cardOf(moved.id)).toBeUndefined();
   });
 
   it("วันนี้ของระบบคิดตามเวลาไทย", () => {

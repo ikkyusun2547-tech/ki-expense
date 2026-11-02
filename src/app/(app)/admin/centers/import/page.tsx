@@ -8,7 +8,7 @@ export default async function ImportCentersPage() {
 
   return (
     <>
-      <PageHeader icon={Upload} title="นำเข้าทะเบียนศูนย์" description="เพิ่มหลายศูนย์พร้อมประวัติย้อนหลังจากตารางรายปี (Excel) หรือไฟล์ CSV" />
+      <PageHeader icon={Upload} title="นำเข้าทะเบียนศูนย์" description="เพิ่ม/อัปเดตหลายศูนย์จากไฟล์ CSV (บันทึกจาก Excel)" />
       <Card className="max-w-4xl">
         <ImportForm />
       </Card>

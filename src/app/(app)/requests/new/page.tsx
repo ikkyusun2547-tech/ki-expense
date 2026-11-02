@@ -1,5 +1,5 @@
 import { FilePlus } from "lucide-react";
-import { Card, PageHeader } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
 import { signerFormProps } from "@/server/services/approvers";
@@ -14,13 +14,13 @@ export default async function NewRequestPage({ searchParams }: PageProps<"/reque
   return (
     <>
       <PageHeader icon={FilePlus} title="สร้างใบเบิก" description="ใส่เลขที่ใบแจ้งหนี้ + แนบไฟล์ ที่เหลือระบบกรอกให้" />
-      <Card className="max-w-3xl">
+      <div className="max-w-3xl">
         <RequestForm
           mode="create"
           initialCode={typeof code === "string" ? code : undefined}
           {...signers}
         />
-      </Card>
+      </div>
     </>
   );
 }

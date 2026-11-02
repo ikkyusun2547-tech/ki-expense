@@ -5,7 +5,7 @@ import { importCenters } from "@/server/actions/centerImport";
 import { deleteCenter, saveCenter, savePhone } from "@/server/actions/centers";
 import { findCenterByCode } from "@/server/actions/requests";
 import { db } from "@/server/db";
-import { getCenterSummaries } from "@/server/services/summary";
+import { getCenterCards } from "@/server/services/summary";
 import { cleanup, createTestUser, form, PASSWORD, PREFIX, run, TEST_PHONE_PREFIX } from "./helpers";
 
 // ทะเบียนเบอร์โทรศัพท์ (Center kind = PHONE): admin เพิ่ม/แก้/ลบ/นำเข้า และต้องไม่ปนกับงานค่าอินเทอร์เน็ต
@@ -122,13 +122,10 @@ describe("ค้นเบอร์ในฟอร์มใบเบิก", () =
       result: { ok: true, center: { kind: "PHONE", customerCode: phone(8), provider: "TRUE", name: "ฝ่ายทดสอบ" } },
     });
     expect(await run(() => findCenterByCode("099-9999999"))).toMatchObject({ result: { ok: false } });
-    const has = (rows: Awaited<ReturnType<typeof getCenterSummaries>>) => rows.some((s) => s.center.customerCode === phone(8));
-    expect(has(await getCenterSummaries("2026-10-26", "INTERNET"))).toBe(false);
-    // ครบกำหนดทุกวันที่ 9 ยังไม่เคยเบิก → เลยกำหนดของเดือนนี้ (นับในตัวเลขบนเมนูผู้จัดทำด้วย)
-    expect((await getCenterSummaries("2026-10-26", "PHONE")).find((s) => s.center.customerCode === phone(8))).toMatchObject({
-      state: "OVERDUE",
-      center: { kind: "PHONE" },
-    });
+    const has = (rows: Awaited<ReturnType<typeof getCenterCards>>) => rows.some((s) => s.center.customerCode === phone(8));
+    expect(has(await getCenterCards("INTERNET"))).toBe(false);
+    // อยู่ในการ์ดเบอร์ (แท็บค่าโทรศัพท์) ยังไม่เคยเบิก
+    expect((await getCenterCards("PHONE")).find((s) => s.center.customerCode === phone(8))).toMatchObject({ center: { kind: "PHONE" } });
   });
 
   it("ไม่ใช่ admin เพิ่มเบอร์ไม่ได้", async () => {

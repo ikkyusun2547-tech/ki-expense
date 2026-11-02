@@ -8,7 +8,7 @@ export default async function ImportPhonesPage() {
 
   return (
     <>
-      <PageHeader icon={Upload} title="นำเข้าทะเบียนเบอร์โทรศัพท์" description="เพิ่มหลายเบอร์พร้อมประวัติย้อนหลังจากตารางรายปี (Excel) หรือไฟล์ CSV" />
+      <PageHeader icon={Upload} title="นำเข้าทะเบียนเบอร์โทรศัพท์" description="เพิ่ม/อัปเดตหลายเบอร์จากไฟล์ CSV (บันทึกจาก Excel)" />
       <Card className="max-w-4xl">
         <ImportForm kind="PHONE" />
       </Card>

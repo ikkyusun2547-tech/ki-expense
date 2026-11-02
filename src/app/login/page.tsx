@@ -1,4 +1,4 @@
-import { CalendarClock, FileText, ShieldCheck } from "lucide-react";
+import { MapPin, MousePointerClick, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import { LoginForm } from "./LoginForm";
@@ -6,8 +6,8 @@ import { LoginForm } from "./LoginForm";
 export const metadata: Metadata = { title: "เข้าสู่ระบบ · ระบบเบิกค่าบริการ" };
 
 const FEATURES = [
-  { icon: FileText, text: "สร้างใบเบิกจากรหัสลูกค้าหรือเบอร์โทร พิมพ์บันทึกภายในได้ทันที" },
-  { icon: CalendarClock, text: "ติดตามศูนย์และเบอร์ที่ใกล้ครบกำหนดแต่ยังไม่เบิก" },
+  { icon: MousePointerClick, text: "เลือกศูนย์จากการ์ด กรอกใบแจ้งหนี้ พิมพ์บันทึกภายในได้ทันที" },
+  { icon: MapPin, text: "รู้ทันทีว่าใบเบิกอยู่ที่ใคร ถึงฝ่ายบัญชีแล้วหรือยัง" },
   { icon: ShieldCheck, text: "กันเบิกซ้ำ และเก็บประวัติทุกขั้นตอน" },
 ];
 
@@ -28,7 +28,7 @@ export default function LoginPage() {
           <ul className="mt-8 space-y-4">
             {FEATURES.map(({ icon: Icon, text }) => (
               <li key={text} className="flex items-center gap-3 text-brand-50">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/10">
                   <Icon className="size-4" aria-hidden />
                 </span>
                 {text}
@@ -39,7 +39,7 @@ export default function LoginPage() {
         <p className="relative text-xs text-brand-200">ระบบภายในบริษัท</p>
       </section>
 
-      <section className="flex items-center justify-center bg-slate-50 px-4 py-12">
+      <section className="flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
             <Image src="/logo-ki-mark.png" alt="KI" width={258} height={128} className="mb-3 h-10 w-auto" priority />
@@ -47,9 +47,10 @@ export default function LoginPage() {
             <div className="text-sm text-slate-500">อินเทอร์เน็ต · โทรศัพท์</div>
             <div className="text-sm text-slate-500">บริษัท น้ำตาลสุรินทร์ จำกัด</div>
           </div>
+          <p className="text-sm font-medium text-brand-600">ยินดีต้อนรับ 👋</p>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">เข้าสู่ระบบ</h2>
           <p className="mt-1 text-sm text-slate-500">ใช้ชื่อผู้ใช้และรหัสผ่านที่ได้รับจากผู้ดูแลระบบ</p>
-          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mt-6 rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm">
             <LoginForm />
           </div>
           <p className="mt-6 text-center text-xs text-slate-500">ลืมรหัสผ่าน ติดต่อผู้ดูแลระบบเพื่อรีเซ็ต</p>

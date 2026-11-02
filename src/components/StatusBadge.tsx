@@ -2,10 +2,12 @@ import type { CenterStatus, RequestStatus, ServiceKind } from "@/generated/prism
 import { Badge, type BadgeTone } from "@/components/ui";
 import { centerStatusLabel, STATUS_LABEL } from "@/lib/status";
 
-const REQUEST_TONE: Record<RequestStatus, BadgeTone> = {
+// สีประจำสถานะใบเบิก — ใช้ทั้งป้ายและพื้นการ์ด (TONE_SURFACE)
+export const REQUEST_TONE: Record<RequestStatus, BadgeTone> = {
   CREATED: "zinc",
   PENDING: "amber",
   APPROVED: "sky",
+  RECEIVED: "violet",
   PAID: "green",
 };
 

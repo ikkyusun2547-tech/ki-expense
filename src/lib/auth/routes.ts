@@ -7,36 +7,31 @@ export const SESSION_COOKIE = "ie_session";
 export const PUBLIC_PATHS = ["/login"];
 
 export const HOME_PATH: Record<Role, string> = {
-  CREATOR: "/summary", // ผู้จัดทำเริ่มจากงานที่ต้องทำ: ศูนย์ที่ยังไม่เบิก
+  CREATOR: "/home", // หน้าแรกแบบแอป: ปุ่มใหญ่เบิกค่าอินเทอร์เน็ต/โทรศัพท์ + ใบเบิกของฉันอยู่ที่ไหน
   ACCOUNTING: "/accounting",
   APPROVER: "/approvals",
-  ADMIN: "/admin/centers",
+  ADMIN: "/home",
 };
 
-// กลุ่มในแถบเมนู: ไม่มี = งานประจำ, INTERNET / PHONE = แยกตามประเภทค่าใช้จ่าย (ผู้ใช้เลือก 2026-10-26), admin = จัดการระบบ
-export type NavItem = { href: string; label: string; group?: ServiceKind | "admin" };
+// เมนูแบบแอป (ผู้ใช้เลือก 2026-10-31 แทนแถบเมนูซ้าย): จอใหญ่ = แท็บด้านบน, มือถือ = แถบล่าง (short = ชื่อสั้นบนแถบล่าง)
+// ค่าอินเทอร์เน็ต/โทรศัพท์ไม่แยกเมนูแล้ว — เลือกด้วยแท็บในหน้า (?kind=)
+// match = path ที่นับว่าอยู่ในเมนูนี้ (ไม่ระบุ = href); ตัวเลขงานค้างบนเมนูใช้ href เป็น key
+export type NavItem = { href: string; label: string; short: string; match?: string };
 
-// หน้าสรุป/รายการใบเบิกของแต่ละประเภท = หน้าเดียวกันที่กรองด้วย ?kind= (ตัวเลขบนเมนูก็ใช้ href นี้เป็น key)
+// หน้าสรุป/รายการใบเบิกของแต่ละประเภท = หน้าเดียวกันที่กรองด้วย ?kind=
 export const kindHref = (path: "/summary" | "/requests", kind: ServiceKind) => `${path}?kind=${kind}`;
 
-const KIND_ITEMS = (withRequests: boolean): NavItem[] => [
-  { href: kindHref("/summary", "INTERNET"), label: "สรุปรายศูนย์", group: "INTERNET" },
-  ...(withRequests ? [{ href: kindHref("/requests", "INTERNET"), label: "ใบเบิก", group: "INTERNET" as const }] : []),
-  { href: kindHref("/summary", "PHONE"), label: "สรุปรายเบอร์", group: "PHONE" },
-  ...(withRequests ? [{ href: kindHref("/requests", "PHONE"), label: "ใบเบิก", group: "PHONE" as const }] : []),
-];
-const APPROVALS: NavItem = { href: "/approvals", label: "รออนุมัติ" };
+const HOME: NavItem = { href: "/home", label: "หน้าแรก", short: "หน้าแรก" };
+const CENTERS: NavItem = { href: "/summary", label: "ศูนย์ & เบอร์", short: "ศูนย์" };
+const REQUESTS: NavItem = { href: "/requests", label: "ใบเบิก", short: "ใบเบิก" };
+const APPROVALS: NavItem = { href: "/approvals", label: "รออนุมัติ", short: "อนุมัติ" };
+const ACCOUNTING: NavItem = { href: "/accounting", label: "ฝ่ายบัญชี", short: "บัญชี" };
+const HISTORY: NavItem = { href: "/history", label: "ประวัติ", short: "ประวัติ" }; // ย้อนดูรายเดือน — ทุกบทบาท (ผู้ใช้เลือก 2026-10-31)
+const ADMIN: NavItem = { href: "/admin/centers", label: "จัดการระบบ", short: "จัดการ", match: "/admin" };
 
 export const NAV_ITEMS: Record<Role, NavItem[]> = {
-  CREATOR: KIND_ITEMS(true),
-  ACCOUNTING: [{ href: "/accounting", label: "ฝ่ายบัญชี" }, ...KIND_ITEMS(false)],
-  APPROVER: [APPROVALS, ...KIND_ITEMS(false)],
-  ADMIN: [
-    APPROVALS,
-    { href: "/accounting", label: "ฝ่ายบัญชี" },
-    ...KIND_ITEMS(true),
-    { href: "/admin/centers", label: "ทะเบียนศูนย์", group: "admin" },
-    { href: "/admin/phones", label: "ทะเบียนเบอร์โทร", group: "admin" },
-    { href: "/admin/users", label: "ผู้ใช้", group: "admin" },
-  ],
+  CREATOR: [HOME, CENTERS, REQUESTS, HISTORY],
+  APPROVER: [APPROVALS, CENTERS, HISTORY],
+  ACCOUNTING: [ACCOUNTING, CENTERS, HISTORY],
+  ADMIN: [HOME, REQUESTS, APPROVALS, ACCOUNTING, CENTERS, HISTORY, ADMIN],
 };

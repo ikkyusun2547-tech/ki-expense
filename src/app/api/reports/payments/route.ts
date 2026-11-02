@@ -18,7 +18,6 @@ export async function GET(request: Request) {
     where: {
       status: "PAID",
       deletedAt: null,
-      imported: false, // ใบย้อนหลังที่นำเข้าจากตารางเดิมไม่ได้จ่ายผ่านระบบ
       paidDate: { gte: fromISODate(`${month}-01`), lt: new Date(Date.UTC(y, m, 1)) },
     },
     orderBy: [{ paidDate: "asc" }, { createdAt: "asc" }],

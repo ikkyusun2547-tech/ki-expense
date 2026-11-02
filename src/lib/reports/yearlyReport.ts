@@ -5,7 +5,7 @@ import { formatBEDate, type ISODate } from "@/lib/thai/date";
 import { amount, border, COLOR, headerStyle, noteStyle, printSetup, spanRow, text, titleStyle, type CellStyle, type FileContent } from "./xlsx";
 
 // ตารางรายปี (แทนตารางสรุปที่เคยเขียนมือ): 1 แถว = 1 ศูนย์/เบอร์, แต่ละเดือนมี ค่าบริการ / กำหนดชำระ / รอบค่าบริการ
-// - ใบเบิกอยู่เดือนไหน = เดือนของวันครบกำหนดชำระ (กฎเดียวกับหน้าสรุปรายศูนย์)
+// - ใบเบิกอยู่เดือนไหน = เดือนของวันครบกำหนดชำระ (เดือนในตาราง = เดือนของ dueDate)
 // - ใบที่ยังไม่จ่าย (สร้างแล้ว/รออนุมัติ/อนุมัติแล้ว) พื้นเหลือง; ศูนย์ที่ย้าย/ปิด ตัวอักษรเทา + เดือนหลังใบสุดท้ายเขียน "ย้ายศูนย์"/"ปิด"
 // - เริ่มคอลัมน์ที่เดือนแรกที่มีใบเบิกในปีนั้น (ปีที่เริ่มใช้ระบบกลางปี ไม่ต้องมีเดือนว่างยาว) ถึงธันวาคม
 // - เรียงแถวตามที่ส่งมา (route เรียงตามลำดับที่เพิ่มเข้าทะเบียน = ลำดับเดิมในกระดาษเมื่อนำเข้า)
@@ -63,25 +63,15 @@ const monthOf = (iso: ISODate) => Number(iso.slice(5, 7)) - 1;
 
 export type YearlyReport = { sheet: SheetData; options: SheetOptions<FileContent> };
 
-// template = แบบฟอร์มให้กรอกจากกระดาษแล้วนำเข้า (admin): ครบ 12 เดือน + แถวว่างให้กรอก + คำแนะนำ ไม่มีแถวรวม
-const TEMPLATE_BLANK_ROWS = 30;
-const TEMPLATE_NOTE: Record<ServiceKind, string> = {
-  INTERNET:
-    'กรอกตามตารางเดิม: ค่าบริการ / กำหนดชำระ (เช่น 24/09/2569) / รอบค่าบริการ (เช่น 24/08/69-23/09/69) · ศูนย์ที่ย้ายแล้วเขียน "ย้ายศูนย์" ในช่องเดือน · เสร็จแล้วนำเข้าที่ ทะเบียนศูนย์ → นำเข้าจากไฟล์',
-  PHONE:
-    'กรอกตามตารางเดิม: ค่าบริการ / กำหนดชำระ (เช่น 24/09/2569) / รอบค่าบริการ (เช่น 16/08/69-15/09/69) · เบอร์ที่ยกเลิกแล้วเขียน "ยกเลิก" ในช่องเดือน · เสร็จแล้วนำเข้าที่ ทะเบียนเบอร์โทร → นำเข้าจากไฟล์',
-};
-
 export function yearlyReport(
   kind: ServiceKind,
   year: number,
   centers: YearlyCenter[],
   allRequests: YearlyRequest[],
   generatedAt: string,
-  { template = false }: { template?: boolean } = {},
 ): YearlyReport {
   const requests = allRequests.filter((r) => Number(r.dueDate.slice(0, 4)) === year);
-  const firstMonth = requests.length && !template ? Math.min(...requests.map((r) => monthOf(r.dueDate))) : 0;
+  const firstMonth = requests.length ? Math.min(...requests.map((r) => monthOf(r.dueDate))) : 0;
   const months = MONTHS.slice(firstMonth);
   const width = FIXED_COUNT + months.length * MONTH_COLUMNS.length + 1;
 
@@ -96,12 +86,7 @@ export function yearlyReport(
   const data: SheetData = [
     spanRow(text(`${KIND_LABEL[kind]} ปี ${year + 543}`, titleStyle), width),
     spanRow(
-      text(
-        template
-          ? TEMPLATE_NOTE[kind]
-          : `บริษัท น้ำตาลสุรินทร์ จำกัด · เดือนตามวันครบกำหนดชำระ · พื้นเหลือง = ยังไม่จ่าย · ออกรายงาน ${generatedAt}`,
-        noteStyle,
-      ),
+      text(`บริษัท น้ำตาลสุรินทร์ จำกัด · เดือนตามวันครบกำหนดชำระ · พื้นเหลือง = ยังไม่จ่าย · ออกรายงาน ${generatedAt}`, noteStyle),
       width,
     ),
     [],
@@ -158,12 +143,6 @@ export function yearlyReport(
     data.push(row);
   });
 
-  if (template) {
-    // แถวว่างให้กรอกศูนย์ใหม่ (ช่องเป็นข้อความ — Excel ไม่แปลงวันที่/รหัสเอง)
-    for (let i = 0; i < TEMPLATE_BLANK_ROWS; i++) data.push(Array.from({ length: width }, () => text("", border)));
-    return { sheet: data, options: sheetOptions(kind, year, months.length) };
-  }
-
   if (centers.length === 0) {
     data.push(spanRow(text(`ยังไม่มี${kind === "PHONE" ? "เบอร์" : "ศูนย์"}ในทะเบียน`, { ...border, align: "center", textColor: COLOR.muted }), width));
   }
@@ -206,5 +185,4 @@ export const yearlySheetName = (kind: ServiceKind, year: number) => `${KIND_LABE
 export const yearlyPrintSetup = (kind: ServiceKind, year: number) =>
   printSetup({ sheetName: yearlySheetName(kind, year), titleRows: YEARLY_HEADER_ROWS, titleColumns: "A:D" });
 
-export const yearlyFileName = (kind: ServiceKind, year: number, template = false) =>
-  `${template ? "แบบฟอร์มนำเข้า" : "ตารางรายปี"}-${KIND_LABEL[kind]}-${year + 543}.xlsx`;
+export const yearlyFileName = (kind: ServiceKind, year: number) => `ตารางรายปี-${KIND_LABEL[kind]}-${year + 543}.xlsx`;

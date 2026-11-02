@@ -10,6 +10,10 @@ import {
   formatThaiDate,
   formatThaiDateRange,
   formatThaiDateTime,
+  formatThaiMonth,
+  isMonthKey,
+  monthRange,
+  monthsBetween,
   fromISODate,
   thaiMonthName,
   isISODate,
@@ -114,5 +118,22 @@ describe("formatThaiDateRange", () => {
   it("ปีเดียวกันพิมพ์ปีครั้งเดียว / ข้ามปีพิมพ์ทั้งสองฝั่ง", () => {
     expect(formatThaiDateRange("2026-09-21", "2026-10-20")).toBe("21 ก.ย. – 20 ต.ค. 2569");
     expect(formatThaiDateRange("2026-12-16", "2027-01-15")).toBe("16 ธ.ค. 2569 – 15 ม.ค. 2570");
+  });
+});
+
+describe("เดือนตามเวลาไทย (ดูใบเบิกตามเดือนที่สร้าง)", () => {
+  it("ช่วงเวลาของเดือน = เที่ยงคืนเวลาไทย", () => {
+    const { gte, lt } = monthRange("2026-10");
+    expect(gte.toISOString()).toBe("2026-09-30T17:00:00.000Z");
+    expect(lt.toISOString()).toBe("2026-10-31T17:00:00.000Z");
+    expect(monthRange("2026-12").lt.toISOString()).toBe("2026-12-31T17:00:00.000Z");
+  });
+
+  it("ชื่อเดือน พ.ศ. / รายการเดือนใหม่สุดก่อน (ข้ามปี) / ตรวจรูปแบบ", () => {
+    expect(formatThaiMonth("2026-10")).toBe("ตุลาคม 2569");
+    expect(monthsBetween("2025-11", "2026-02")).toEqual(["2026-02", "2026-01", "2025-12", "2025-11"]);
+    expect(monthsBetween("2026-10", "2026-10")).toEqual(["2026-10"]);
+    expect(isMonthKey("2026-10")).toBe(true);
+    expect(isMonthKey("2026-13")).toBe(false);
   });
 });

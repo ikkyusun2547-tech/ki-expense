@@ -90,7 +90,7 @@ export type RequestFormState = {
 };
 
 // สร้าง (ไม่มี id) หรือแก้ไข (มี id) ใบเบิก; ถ้ามีคำเตือนต้องส่ง confirmWarnings=1 มาอีกรอบ
-// intent=submit → บันทึกแล้วส่งขออนุมัติต่อทันที (ต้องเลือกผู้อนุมัติ) แล้วกลับหน้าสรุปรายศูนย์ไปทำศูนย์ถัดไป
+// intent=submit → บันทึกแล้วส่งขออนุมัติต่อทันที (ต้องเลือกผู้อนุมัติ) แล้วกลับหน้าการ์ดศูนย์ไปทำศูนย์ถัดไป
 export async function saveRequest(_prev: RequestFormState, formData: FormData): Promise<RequestFormState> {
   const actor = await requireRole("CREATOR");
 

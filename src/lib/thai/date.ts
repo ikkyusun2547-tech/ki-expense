@@ -45,6 +45,11 @@ export function todayISO(now: Date = new Date()): ISODate {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(now);
 }
 
+// ชั่วโมงตามเวลาไทย 0–23 (คำทักทายตามช่วงเวลา)
+export function thaiHour(now: Date = new Date()): number {
+  return Number(new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", hourCycle: "h23" }).format(now));
+}
+
 // เวลาไทย "10:30" (เวลาเหตุการณ์ เช่น อนุมัติในระบบ)
 export function formatThaiTime(date: Date): string {
   return new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date);
@@ -87,6 +92,34 @@ export function formatThaiDateTime(date: Date): string {
       .map((p) => [p.type, p.value]),
   );
   return `${formatThaiDate(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute}`;
+}
+
+// ---------- เดือน "YYYY-MM" (เวลาไทย) — ดูใบเบิกตามเดือนที่สร้าง ----------
+
+export const isMonthKey = (s: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
+
+// ช่วงเวลาของเดือนตามเวลาไทย (UTC+7 ไม่มีเวลาออมแสง) สำหรับกรองคอลัมน์ timestamp เช่น createdAt
+export function monthRange(month: string): { gte: Date; lt: Date } {
+  const [y, m] = month.split("-").map(Number);
+  const offset = 7 * 60 * 60 * 1000;
+  return { gte: new Date(Date.UTC(y, m - 1, 1) - offset), lt: new Date(Date.UTC(y, m, 1) - offset) };
+}
+
+// "ตุลาคม 2569"
+export function formatThaiMonth(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return `${MONTHS_LONG[m - 1]} ${y + 543}`;
+}
+
+// เดือนตั้งแต่ from ถึง to (รวมทั้งสองเดือน) ใหม่สุดก่อน — ตัวเลือกเดือนในหน้าใบเบิก
+export function monthsBetween(from: string, to: string): string[] {
+  const out: string[] = [];
+  let [y, m] = to.split("-").map(Number);
+  while (`${y}-${String(m).padStart(2, "0")}` >= from) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (--m === 0) [y, m] = [y - 1, 12];
+  }
+  return out;
 }
 
 // ใบเบิก (บันทึกภายใน FM-50000-02) ใช้ พ.ศ. ทั้งหมด

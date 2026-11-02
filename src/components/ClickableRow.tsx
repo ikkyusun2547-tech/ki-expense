@@ -22,7 +22,7 @@ export function ClickableRow({ href, className, children }: { href: string; clas
 
   return (
     // พื้นเปลี่ยนสีชัดกว่าแถวทั่วไป (rowClass) ให้รู้ว่ากดได้
-    <tr onClick={onClick} className={cx("group cursor-pointer transition-colors hover:bg-brand-100", className)}>
+    <tr onClick={onClick} className={cx("group cursor-pointer transition-colors hover:bg-brand-50", className)}>
       {children}
     </tr>
   );

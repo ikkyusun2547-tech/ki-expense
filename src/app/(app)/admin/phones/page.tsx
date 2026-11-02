@@ -24,6 +24,7 @@ import { formatAmount } from "@/lib/money";
 import { PHONE_STATUS_LABEL } from "@/lib/status";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
+import { AdminTabs } from "../AdminTabs";
 
 // ทะเบียนเบอร์โทรศัพท์ = แถวในตาราง Center ที่ kind = PHONE (หมายเลข = customerCode, รหัสลูกค้าของค่าย = serviceNumber)
 
@@ -68,6 +69,7 @@ export default async function PhonesPage({ searchParams }: PageProps<"/admin/pho
 
   return (
     <>
+      <AdminTabs current="/admin/phones" />
       <PageHeader
         icon={Smartphone}
         title="ทะเบียนเบอร์โทรศัพท์"

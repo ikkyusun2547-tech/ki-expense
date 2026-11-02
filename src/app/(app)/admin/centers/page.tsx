@@ -24,6 +24,7 @@ import { formatAmount } from "@/lib/money";
 import { CENTER_STATUS_LABEL } from "@/lib/status";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
+import { AdminTabs } from "../AdminTabs";
 
 const STATUSES = Object.keys(CENTER_STATUS_LABEL) as CenterStatus[];
 
@@ -65,6 +66,7 @@ export default async function CentersPage({ searchParams }: PageProps<"/admin/ce
 
   return (
     <>
+      <AdminTabs current="/admin/centers" />
       <PageHeader
         icon={Building}
         title="ทะเบียนศูนย์"

@@ -1,6 +1,6 @@
 import { Pencil } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { Card, PageHeader } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { checkRequestAction } from "@/lib/status";
 import { toISODate } from "@/lib/thai/date";
 import { requireRole } from "@/server/auth";
@@ -29,7 +29,7 @@ export default async function EditRequestPage({ params }: PageProps<"/requests/[
         title="แก้ไขใบเบิก"
         description="เปลี่ยนศูนย์/เบอร์ไม่ได้ — ถ้าเลือกผิดให้ลบแล้วสร้างใหม่"
       />
-      <Card className="max-w-3xl">
+      <div className="max-w-3xl">
         <RequestForm
           mode="edit"
           id={request.id}
@@ -56,7 +56,7 @@ export default async function EditRequestPage({ params }: PageProps<"/requests/[
             dueDate: toISODate(request.dueDate),
           }}
         />
-      </Card>
+      </div>
     </>
   );
 }

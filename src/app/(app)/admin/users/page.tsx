@@ -6,6 +6,7 @@ import { ROLE_LABEL } from "@/lib/status";
 import { nameInitial } from "@/lib/thai/name";
 import { requireRole } from "@/server/auth";
 import { db } from "@/server/db";
+import { AdminTabs } from "../AdminTabs";
 
 const ROLE_AVATAR: Record<Role, string> = {
   CREATOR: "bg-sky-100 text-sky-800",
@@ -22,6 +23,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
 
   return (
     <>
+      <AdminTabs current="/admin/users" />
       <PageHeader
         icon={Users}
         title="ผู้ใช้"

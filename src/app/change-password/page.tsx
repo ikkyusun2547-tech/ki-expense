@@ -19,7 +19,7 @@ export default function ChangePasswordPage() {
           </span>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">เปลี่ยนรหัสผ่าน</h1>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm">
           <Suspense fallback={<p className="text-sm text-slate-500">กำลังโหลด…</p>}>
             <ChangePasswordContent />
           </Suspense>

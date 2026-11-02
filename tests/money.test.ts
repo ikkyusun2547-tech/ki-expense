@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAmount, parseAmount, toAmountString, toSatang } from "@/lib/money";
+import { formatAmount, fromSatang, parseAmount, toAmountString, toSatang } from "@/lib/money";
 
 describe("parseAmount", () => {
   it.each([
@@ -41,5 +41,13 @@ describe("formatAmount", () => {
     ["1234567.5", "1,234,567.50"],
   ])("%s → %s", (raw, expected) => {
     expect(formatAmount(raw)).toBe(expected);
+  });
+});
+
+describe("fromSatang", () => {
+  it("รวมยอดด้วยสตางค์แล้วแปลงกลับ ไม่เพี้ยน", () => {
+    expect(fromSatang(toSatang("631.30") + toSatang("1068.93"))).toBe("1700.23");
+    expect(fromSatang(BigInt(5))).toBe("0.05");
+    expect(fromSatang(BigInt(0))).toBe("0.00");
   });
 });

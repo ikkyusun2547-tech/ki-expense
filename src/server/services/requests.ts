@@ -1,13 +1,13 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import type { Role, ServiceKind } from "@/generated/prisma/enums";
-import { toAmountString } from "@/lib/money";
-import { fillMemoTexts, type MemoTexts } from "@/lib/pdf/memoData";
+import { parseAmount, toAmountString } from "@/lib/money";
+import { fillMemoTexts, type MemoInput, type MemoTexts } from "@/lib/pdf/memoData";
 import { checkPayment, type PaymentInput } from "@/lib/rules/paymentRules";
 import { phoneCharges } from "@/lib/rules/phoneCharges";
 import { checkRequest, needsConfirm, type Issue, type RequestDraft } from "@/lib/rules/requestRules";
 import { checkRequestAction, checkSignerChange, checkTransition, isAssignedApprover, NOT_OWNER_REASON, type RequestAction } from "@/lib/status";
-import { formatThaiDate, fromISODate, toISODate, type ISODate } from "@/lib/thai/date";
+import { formatThaiDate, fromISODate, isISODate, todayISO, toISODate, type ISODate } from "@/lib/thai/date";
 import type { CurrentUser } from "@/server/auth";
 import { db } from "@/server/db";
 import { isOverlapViolation } from "@/server/dbErrors";
@@ -114,6 +114,61 @@ const approverData = (s: Snapshot) => ({ approverId: s.id, approverName: s.name,
 const requesterData = (s: Snapshot) => ({ requesterId: s.id, requesterName: s.name, requesterTitle: s.title });
 
 const SIGNER_NOT_FOUND = "ไม่พบผู้ลงนามที่เลือก (อาจถูกปิดบัญชี) กรุณาเลือกใหม่";
+
+// ---------- ตัวอย่าง PDF จากข้อมูลในฟอร์ม (ยังไม่บันทึก) ----------
+
+export type PreviewArgs = {
+  actor: CurrentUser;
+  centerId: string;
+  requestId?: string; // แก้ไขใบเดิม → วันที่บันทึก/ผู้จัดทำของใบนั้น
+  amount: string;
+  packageAmount: string; // ค่าโทรศัพท์ (ก่อน VAT) — ยอดคิดจากสองช่องนี้ เหมือนตอนบันทึกจริง
+  extraAmount: string;
+  periodEnd: string;
+  dueDate: string;
+  approverId: string | null; // null = ยังไม่เลือก
+  requesterId: string | null; // null = ผู้จัดทำ
+  texts: MemoTexts;
+};
+
+// ข้อมูลสำหรับ buildMemo จากค่าที่กรอกในฟอร์ม — ตรวจแค่ที่ต้องใช้พิมพ์ (กฎกันซ้ำ/คำเตือนตรวจตอนบันทึกจริง)
+export async function previewMemoInput(args: PreviewArgs): Promise<{ ok: true; input: MemoInput } | { ok: false; error: string }> {
+  const center = await db.center.findUnique({ where: { id: args.centerId } });
+  if (!center) return { ok: false, error: "ไม่พบศูนย์/เบอร์ที่เลือก" };
+  const existing = args.requestId
+    ? await db.request.findUnique({ where: { id: args.requestId }, select: { createdAt: true, createdById: true } })
+    : null;
+
+  const amount = center.kind === "PHONE" ? (phoneCharges(args.packageAmount, args.extraAmount)?.total ?? null) : parseAmount(args.amount);
+  if (amount === null) return { ok: false, error: "กรอกยอดเงินให้ถูกต้องก่อน (ตัวเลข ทศนิยมไม่เกิน 2 ตำแหน่ง)" };
+  if (!isISODate(args.dueDate)) return { ok: false, error: "กรอกวันครบกำหนดชำระก่อน" };
+  if (center.kind === "PHONE" && !isISODate(args.periodEnd)) return { ok: false, error: "กรอกรอบบริการก่อน (ใบค่าโทรศัพท์ใช้เดือนที่รอบบริการสิ้นสุด)" };
+
+  const approver = await signerSnapshot(args.approverId, "APPROVER");
+  const requester = await signerSnapshot(args.requesterId, "CREATOR");
+  if (!approver || !requester) return { ok: false, error: SIGNER_NOT_FOUND };
+  const creator = await db.user.findUniqueOrThrow({ where: { id: existing?.createdById ?? args.actor.id }, select: { name: true, title: true } });
+
+  return {
+    ok: true,
+    input: {
+      memoDate: todayISO(existing?.createdAt), // ใบใหม่ = วันนี้ (วันที่ที่จะบันทึก)
+      kind: center.kind,
+      customerCode: center.customerCode,
+      provider: center.provider,
+      serviceUser: center.name,
+      amount,
+      dueDate: args.dueDate,
+      ...(isISODate(args.periodEnd) && { periodEnd: args.periodEnd }),
+      creator,
+      signers: {
+        requester: requester.name !== null ? { name: requester.name, title: requester.title ?? "" } : null,
+        approver: approver.name !== null ? { name: approver.name, title: approver.title ?? "" } : null,
+      },
+      texts: fillMemoTexts(args.texts, center.kind),
+    },
+  };
+}
 
 export async function createRequest(args: {
   centerId: string;
@@ -241,14 +296,15 @@ export async function updateRequest(args: {
 
 export type TransitionOutcome = { ok: true } | { ok: false; error: string };
 
-export type TransitionAction = Extract<RequestAction, "SUBMIT" | "APPROVE" | "REJECT" | "DELETE" | "REVERT">;
+export type TransitionAction = Extract<RequestAction, "SUBMIT" | "APPROVE" | "REJECT" | "RECEIVE" | "DELETE" | "REVERT">;
 
 const NOTE_REQUIRED: Partial<Record<TransitionAction, string>> = {
   REJECT: "กรุณาระบุเหตุผลที่ไม่อนุมัติ",
   REVERT: "กรุณาระบุเหตุผลที่ย้อนสถานะ",
 };
 
-// เปลี่ยนสถานะ: SUBMIT (ส่งขออนุมัติ), APPROVE/REJECT (ผู้อนุมัติที่เลือกไว้ในใบ), DELETE (ลบแบบ soft), REVERT (admin ย้อนกลับ)
+// เปลี่ยนสถานะ: SUBMIT (ส่งขออนุมัติ), APPROVE/REJECT (ผู้อนุมัติที่เลือกไว้ในใบ), RECEIVE (บัญชีรับเอกสาร),
+// DELETE (ลบแบบ soft), REVERT (admin ย้อนกลับ)
 // PAY แยกเป็น payRequest เพราะต้องรับวันที่จ่าย + เลขอ้างอิง
 export async function transitionRequest(args: {
   requestId: string;
@@ -273,14 +329,19 @@ export async function transitionRequest(args: {
   }
 
   const note = args.note?.trim() || null;
-  const noteMessage = current.imported && args.action === "DELETE" ? "กรุณาระบุเหตุผลที่ลบใบย้อนหลัง" : NOTE_REQUIRED[args.action];
+  const noteMessage = NOTE_REQUIRED[args.action];
   if (noteMessage && !note) return { ok: false, error: noteMessage };
 
-  // อนุมัติ → บันทึกเวลา (พิมพ์ในใบเบิก); กลับเป็นสร้างแล้ว → ล้างเวลาอนุมัติเดิม
+  // อนุมัติ/รับเอกสาร → บันทึกเวลา (เวลาอนุมัติพิมพ์ในใบเบิก); กลับเป็นสร้างแล้ว → ล้างเวลาเดิม
+  const reset = allowed.to === "CREATED" ? null : undefined;
   const data =
     args.action === "DELETE"
       ? { deletedAt: new Date() }
-      : { status: allowed.to, approvedAt: args.action === "APPROVE" ? new Date() : allowed.to === "CREATED" ? null : undefined };
+      : {
+          status: allowed.to,
+          approvedAt: args.action === "APPROVE" ? new Date() : reset,
+          receivedAt: args.action === "RECEIVE" ? new Date() : reset,
+        };
 
   try {
     await db.$transaction(async (tx) => {
@@ -309,7 +370,7 @@ export async function transitionRequest(args: {
 
 export type PayOutcome = { ok: true } | { ok: false; error?: string; fieldErrors?: { paidDate?: string; paymentRef?: string } };
 
-// ฝ่ายบัญชีบันทึกการจ่าย: APPROVED → PAID (ล็อก) — แก้ได้เฉพาะวันที่จ่ายกับเลขอ้างอิง
+// ฝ่ายบัญชีบันทึกการจ่าย: RECEIVED (รับเอกสารแล้ว) → PAID (ล็อก) — แก้ได้เฉพาะวันที่จ่ายกับเลขอ้างอิง
 export async function payRequest(args: {
   requestId: string;
   input: PaymentInput;
@@ -328,7 +389,7 @@ export async function payRequest(args: {
   try {
     await db.$transaction(async (tx) => {
       const updated = await tx.request.updateMany({
-        where: { id: current.id, status: "APPROVED", deletedAt: null },
+        where: { id: current.id, status: "RECEIVED", deletedAt: null },
         data: { status: "PAID", paidDate: fromISODate(payment.paidDate), paymentRef: payment.paymentRef },
       });
       if (updated.count === 0) throw new StaleRequestError();
@@ -336,7 +397,7 @@ export async function payRequest(args: {
         data: {
           requestId: current.id,
           action: "PAY",
-          fromStatus: "APPROVED",
+          fromStatus: "RECEIVED",
           toStatus: "PAID",
           actorId: args.actor.id,
           note: `จ่ายวันที่ ${formatThaiDate(payment.paidDate)}${payment.paymentRef ? ` เลขอ้างอิง ${payment.paymentRef}` : ""}`,
@@ -476,7 +537,7 @@ export async function transferRequest(args: { requestId: string; toUserId: strin
 export const openRequestsWhere = (userId: string): Prisma.RequestWhereInput => ({
   createdById: userId,
   deletedAt: null,
-  status: { in: ["CREATED", "PENDING", "APPROVED"] },
+  status: { in: ["CREATED", "PENDING", "APPROVED", "RECEIVED"] },
 });
 
 export async function transferOpenRequests(args: { fromUserId: string; toUserId: string; actor: CurrentUser }) {

@@ -34,7 +34,8 @@ function loadLogo(): MemoLogo | null {
   return null;
 }
 
-export async function renderInternalMemo(data: MemoData): Promise<Buffer> {
+// preview = ตัวอย่างจากฟอร์มก่อนบันทึก (มีลายน้ำ)
+export async function renderInternalMemo(data: MemoData, { preview = false }: { preview?: boolean } = {}): Promise<Buffer> {
   registerFonts();
-  return renderToBuffer(<InternalMemo data={data} logo={loadLogo()} />);
+  return renderToBuffer(<InternalMemo data={data} logo={loadLogo()} preview={preview} />);
 }

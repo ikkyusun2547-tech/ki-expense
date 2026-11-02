@@ -38,7 +38,7 @@ describe("จดจำฉัน", () => {
 describe("ล็อกอิน", () => {
   it("รหัสถูก → ได้ cookie session และไปหน้าของบทบาท", async () => {
     await createTestUser("creator", "CREATOR");
-    expect(await loginAs("creator")).toEqual({ redirect: "/summary" });
+    expect(await loginAs("creator")).toEqual({ redirect: "/home" });
     expect(cookieJar.size).toBe(1);
   });
 
@@ -85,7 +85,7 @@ describe("เปลี่ยนรหัสผ่าน", () => {
     const result = await run(() =>
       changePassword(initialFormState, form({ currentPassword: PASSWORD, newPassword: "brand-new-pass", confirmPassword: "brand-new-pass" })),
     );
-    expect(result).toEqual({ redirect: "/summary" });
+    expect(result).toEqual({ redirect: "/home" });
     const updated = await db.user.findUniqueOrThrow({ where: { id: user.id } });
     expect(updated.mustChangePassword).toBe(false);
     expect(await verifyPassword("brand-new-pass", updated.passwordHash)).toBe(true);

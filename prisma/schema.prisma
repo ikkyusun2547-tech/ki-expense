@@ -33,7 +33,8 @@ enum ServiceKind {
 enum RequestStatus {
   CREATED // สร้างแล้ว
   PENDING // รออนุมัติ
-  APPROVED // อนุมัติแล้ว (เข้าคิวฝ่ายบัญชี) — เดิมชื่อ SENT "ส่งบัญชีแล้ว"
+  APPROVED // อนุมัติแล้ว (เอกสารกำลังส่งไปฝ่ายบัญชี) — เดิมชื่อ SENT "ส่งบัญชีแล้ว"
+  RECEIVED // ฝ่ายบัญชีรับเอกสารแล้ว (รอจ่าย)
   PAID // จ่ายแล้ว
 }
 
@@ -44,6 +45,7 @@ enum LogAction {
   SEND // เลิกใช้ (ก่อนมีการอนุมัติในระบบ) — คงไว้เพราะ log เก่าลบไม่ได้
   SUBMIT // ส่งขออนุมัติ
   APPROVE
+  RECEIVE // ฝ่ายบัญชีรับเอกสาร (กระดาษ) แล้ว
   REJECT // ไม่อนุมัติ → กลับเป็นสร้างแล้ว
   PAY
   REVERT
@@ -138,14 +140,12 @@ model Request {
   approverName    String?
   approverTitle   String?
   approvedAt      DateTime? // เวลาที่ผู้อนุมัติกดอนุมัติ — พิมพ์ในใบเบิก
+  receivedAt      DateTime? // เวลาที่ฝ่ายบัญชีกดรับเอกสาร
   // ข้อความหัวบันทึกของใบนี้ (ผู้จัดทำกรอกในฟอร์ม ค่าเริ่มต้น = ใบล่าสุดของตน) — แทนหน้าตั้งค่ากลางที่เลิกใช้
   department      String // จาก (ฝ่าย) — ใช้ในย่อหน้า "... ขอเบิกค่าใช้บริการ" ด้วย
   recipient       String // เรียน
   purpose         String // เพื่อ
   createdById     String
-  // ใบย้อนหลังที่ admin นำเข้าจากตารางเดิม (จ่ายนอกระบบก่อนเริ่มใช้): สถานะจ่ายแล้ว, วันที่จ่าย = กำหนดชำระ
-  // ไม่นับในรายการ/รายงานการจ่ายของฝ่ายบัญชี แต่นับในสรุปรายศูนย์ ตารางรายปี และกฎกันเบิกซ้ำ
-  imported        Boolean       @default(false)
   deletedAt       DateTime? // soft delete: ลบได้เฉพาะสถานะ CREATED
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

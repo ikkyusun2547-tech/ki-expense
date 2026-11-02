@@ -56,14 +56,26 @@ const styles = StyleSheet.create({
   signRole: { width: 66, textAlign: "right" },
   signDate: { marginTop: 2 },
   formCode: { marginTop: 5, fontSize: SIZE.formCode, color: "#333" },
+
+  // ลายน้ำ "ตัวอย่าง" (ดูตัวอย่างจากฟอร์มก่อนบันทึก) — ทแยงกลางหน้า สีจาง ไม่บังข้อความ
+  watermark: { position: "absolute", top: 330, left: 0, right: 0, alignItems: "center", transform: "rotate(-32deg)" },
+  watermarkText: { fontSize: 120, fontWeight: "bold", color: "#8d9bb0", opacity: 0.42, lineHeight: 1.2 },
+  watermarkNote: { fontSize: 22, fontWeight: "bold", color: "#64748b", opacity: 0.5 },
 });
 
 export type MemoLogo = { data: Buffer; format: "png" | "jpg" };
 
-export function InternalMemo({ data, logo }: { data: MemoData; logo: MemoLogo | null }) {
+// preview = ตัวอย่างจากฟอร์มที่ยังไม่บันทึก → มีลายน้ำ "ตัวอย่าง"
+export function InternalMemo({ data, logo, preview = false }: { data: MemoData; logo: MemoLogo | null; preview?: boolean }) {
   return (
     <Document title={`บันทึกภายใน ${data.subject} ${data.subjectDetail || data.rows[0]?.customerCode}`} author={data.company} language="th">
       <Page size="A4" style={styles.page}>
+        {preview && (
+          <View style={styles.watermark} fixed>
+            <T style={styles.watermarkText}>ตัวอย่าง</T>
+            <T style={styles.watermarkNote}>ยังไม่ได้บันทึกในระบบ</T>
+          </View>
+        )}
         {/* ---------- หัวบันทึก ---------- */}
         <View style={styles.header}>
           <View style={styles.row}>
